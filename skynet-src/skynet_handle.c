@@ -35,7 +35,6 @@ uint32_t
 skynet_handle_register(struct skynet_context *ctx) {
 	struct handle_storage *s = H;
 
-	/*»ñÈ¡Ð´Ëø*/
 	rwlock_wlock(&s->lock);
 	
 	for (;;) {
@@ -260,4 +259,5 @@ skynet_handle_init(int harbor) {
 
 	// Don't need to free H
 }
+
 
