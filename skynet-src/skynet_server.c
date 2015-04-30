@@ -80,7 +80,8 @@ context_inc() {
 }
 
 /**
- * @brief 原子减*/
+ * @brief 原子减
+ *
  */
 static void
 context_dec() {
