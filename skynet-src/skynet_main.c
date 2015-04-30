@@ -13,6 +13,12 @@
 #include <signal.h>
 #include <assert.h>
 
+/**
+  * @brief ³¢ÊÔ»ñÈ¡key¶ÔÓ¦µÄval£¬Èç¹ûÎ´¶¨Òå
+  *    Ôò½«ÆäÉèÖÃÎªopt¶ÔÓ¦µÄÖ²²¢·µ»
+  * @param[in] key ¹Ø¼ü×Ö
+  * @param[in] opt Öµ
+  */
 static int
 optint(const char *key, int opt) {
 	const char * str = skynet_getenv(key);
@@ -37,6 +43,12 @@ optboolean(const char *key, int opt) {
 }
 */
 
+/**
+  * @brief ³¢ÊÔ»ñÈ¡key¶ÔÓ¦µÄval£¬Èç¹ûÎ´¶¨Òå
+  *    Ôò½«ÆäÉèÖÃÎªopt¶ÔÓ¦µÄÖ²²¢·µ»
+  * @param[in] key ¹Ø¼ü×Ö
+  * @param[in] opt Öµ
+  */
 static const char *
 optstring(const char *key,const char * opt) {
 	const char * str = skynet_getenv(key);
@@ -76,6 +88,9 @@ _init_env(lua_State *L) {
 	lua_pop(L,1);
 }
 
+/**
+  * @brief ÓÃÓÚÆÁ±Î¹ÜµÀÆÆÁÑ
+  */
 int sigign() {
 	struct sigaction sa;
 	sa.sa_handler = SIG_IGN;
@@ -99,24 +114,32 @@ int
 main(int argc, char *argv[]) {
 	const char * config_file = NULL ;
 	if (argc > 1) {
+		/*´Ó²ÎÊı»ñÈ¡ÅäÖÃÎÄ¼şÂ·¾¶*/
 		config_file = argv[1];
 	} else {
 		fprintf(stderr, "Need a config file. Please read skynet wiki : https://github.com/cloudwu/skynet/wiki/Config\n"
 			"usage: skynet configfilename\n");
 		return 1;
 	}
+
+	/*³õÊ¼»¯Ïß³Ì¹²Ïí²ÎÊı*/
 	skynet_globalinit();
+	/*¼ÓÔØlua»·¾³*/
 	skynet_env_init();
-
+	/*ÆÁ±Î¹ÜµÀÆÆÁÑ*/
 	sigign();
-
+      /*¼ÓÔØluaÄ£¿é*/
 	struct skynet_config config;
 
+      /*³õÊ¼lua½»»¥½á¹¹*/
 	struct lua_State *L = lua_newstate(skynet_lalloc, NULL);
+	 /*¼ÓÔØÖ¸¶¨lua¿â*/
 	luaL_openlibs(L);	// link lua lib
 
+	/*¼ÓÔØÅäÖÃÎÄ¼ş*/
 	int err = luaL_loadstring(L, load_config);
 	assert(err == LUA_OK);
+	
 	lua_pushstring(L, config_file);
 
 	err = lua_pcall(L, 1, 1, 0);
@@ -128,15 +151,23 @@ main(int argc, char *argv[]) {
 	_init_env(L);
 
 	config.thread =  optint("thread",8);
+	/*³¢ÊÔ»ñÈ¡threadµÄÖµ£¬Ä¬ÈÏÉèÖÃÎª 8*/
 	config.module_path = optstring("cpath","./cservice/?.so");
+	/*³¢ÊÔ»ñÈ¡harborµÄÖµ£¬Ä¬ÈÏÉèÖÃÎª 1*/
 	config.harbor = optint("harbor", 1);
+	/*³¢ÊÔ»ñÈ¡bootstrapµÄÖµ£¬Ä¬ÈÏÉèÖÃÎª bootstrap*/
 	config.bootstrap = optstring("bootstrap","snlua bootstrap");
+	/*³¢ÊÔ»ñÈ¡daemonµÄÖµ*/
 	config.daemon = optstring("daemon", NULL);
+	/*³¢ÊÔ»ñÈ¡loggerµÄÖµ*/
 	config.logger = optstring("logger", NULL);
 
 	lua_close(L);
 
+	/*¿ªÊ¼ÔËĞĞskynet*/  
 	skynet_start(&config);
+
+	/*ÇåÀí¹¤×÷*/
 	skynet_globalexit();
 
 	return 0;

@@ -117,11 +117,17 @@ _timer(void *p) {
 
 static void *
 _worker(void *p) {
+	/*该线程的信息*/
 	struct worker_parm *wp = p;
+	/*获取ID*/
 	int id = wp->id;
-	int weight = wp->weight;
+	/*获取权重*/
+	int weight = wp->weight
+	/*获取总的监视器*/;
 	struct monitor *m = wp->m;
-	struct skynet_monitor *sm = m->m[id];
+	/*获取该线程的监视器*/
+	struct skynet_monitor *sm = m->m[id]
+	/*向该线程私有空间传入THREAD_WORKER*/;
 	skynet_initthread(THREAD_WORKER);
 	struct message_queue * q = NULL;
 	for (;;) {
@@ -144,93 +150,135 @@ _worker(void *p) {
 	return NULL;
 }
 
+/**
+  * @brief 各个skynet模块以真线程的方式运作
+  * @param[in] thread 真线程个数
+  *
+  */
 static void
 _start(int thread) {
 	pthread_t pid[thread+3];
-
+      /*这是总的监视器，只有一个，
+	  各个线程有skynet monitor*/
 	struct monitor *m = skynet_malloc(sizeof(*m));
 	memset(m, 0, sizeof(*m));
+	/*counter 记录的是业务线程的数量*/
 	m->count = thread;
 	m->sleep = 0;
 
 	m->m = skynet_malloc(thread * sizeof(struct skynet_monitor *));
 	int i;
+	/*分配监视器*/
 	for (i=0;i<thread;i++) {
 		m->m[i] = skynet_monitor_new();
 	}
+
+	/*初始化锁*/
 	if (pthread_mutex_init(&m->mutex, NULL)) {
 		fprintf(stderr, "Init mutex error");
 		exit(1);
 	}
+	/*初始化条件管理*/
 	if (pthread_cond_init(&m->cond, NULL)) {
 		fprintf(stderr, "Init cond error");
 		exit(1);
 	}
 
+	/*除了业务外监视器，时钟，套接字管理
+	   将占用3个真线程*/ 
 	create_thread(&pid[0], _monitor, m);
 	create_thread(&pid[1], _timer, m);
 	create_thread(&pid[2], _socket, m);
 
+	 /*设置前32个线程的权重*/
 	static int weight[] = { 
 		-1, -1, -1, -1, 0, 0, 0, 0,
 		1, 1, 1, 1, 1, 1, 1, 1, 
 		2, 2, 2, 2, 2, 2, 2, 2, 
 		3, 3, 3, 3, 3, 3, 3, 3, };
+	/*worker_parm 结构用于存放各个线程的id，权重等数据*/
 	struct worker_parm wp[thread];
+
+	/*对各个线程数据进行填充*/
 	for (i=0;i<thread;i++) {
+		/*填充参数*/
 		wp[i].m = m;
 		wp[i].id = i;
 		if (i < sizeof(weight)/sizeof(weight[0])) {
 			wp[i].weight= weight[i];
 		} else {
+			/*非默认权重的线程，权重为0*/
 			wp[i].weight = 0;
 		}
+		/*启动业务线程*/
 		create_thread(&pid[i+3], _worker, &wp[i]);
 	}
 
+	/*阻塞,等待*/
 	for (i=0;i<thread+3;i++) {
 		pthread_join(pid[i], NULL); 
 	}
-
+	/*释放监视管理*/
 	free_monitor(m);
 }
 
+/**
+  * @brief 遍历所有cmd列出的模块，并全部进行加载
+  * @param[out] logger 用于输出信息
+  * @param[in] cmdline 各个模块的路径
+  *
+  */
 static void
 bootstrap(struct skynet_context * logger, const char * cmdline) {
 	int sz = strlen(cmdline);
 	char name[sz+1];
 	char args[sz+1];
 	sscanf(cmdline, "%s %s", name, args);
+	/*加载该模块*/
 	struct skynet_context *ctx = skynet_context_new(name, args);
 	if (ctx == NULL) {
+		/*这里skynet并未完全启动起来
+		    因此直接使用error线程的业务处理通输出错误*/
 		skynet_error(NULL, "Bootstrap error : %s\n", cmdline);
 		skynet_context_dispatchall(logger);
 		exit(1);
 	}
 }
 
+/**
+  * @brief 初始化必要结构，加载模块，启动服务.
+  * @param[in] config 配置文件管理结构
+  *
+  */
 void 
 skynet_start(struct skynet_config * config) {
 	if (config->daemon) {
+		/*根据配置转换为后台服务*/
 		if (daemon_init(config->daemon)) {
 			exit(1);
 		}
 	}
 	skynet_harbor_init(config->harbor);
 	skynet_handle_init(config->harbor);
+	/*初始化消息队列管理结构，链式管理*/
 	skynet_mq_init();
+	/*初始化模块管理结构*/
 	skynet_module_init(config->module_path);
+	/*初始化时间管理*/
 	skynet_timer_init();
+	/*初始化套接字全局管理结构*/
 	skynet_socket_init();
-
+	
+       /*log为默认的模块*/
 	struct skynet_context *ctx = skynet_context_new("logger", config->logger);
 	if (ctx == NULL) {
 		fprintf(stderr, "Can't launch logger service\n");
 		exit(1);
 	}
-
+      /*加载模块*/
 	bootstrap(ctx, config->bootstrap);
 
+	/*启动各个真线程，开始处理业务*/
 	_start(config->thread);
 
 	// harbor_exit may call socket send, so it should exit before socket_free

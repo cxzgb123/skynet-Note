@@ -19,34 +19,46 @@
 
 struct message_queue {
 	uint32_t handle;
-	int cap;
-	int head;
-	int tail;
-	int lock;
+	int cap;                             /*队列大小*/
+	int head;                           /*队头索引*/
+	int tail;                             /*队尾索引*/
+	int lock;                            /* 队列锁*/
 	int release;
-	int in_global;
+	int in_global;                     /*标志该队列是否在全局消息队列中*/
 	int overload;
-	int overload_threshold;
-	struct skynet_message *queue;
-	struct message_queue *next;
+	int overload_threshold;       /*队列满时标注为MQ_OVERLOAD,空时恢复*/
+	struct skynet_message *queue;   /*队列指针*/
+	struct message_queue *next;     /*用于链接入全局消息管理结构*/
 };
 
+/**
+  * @brief 全局消息管理结构
+  * @note 队列运作，链表管理  
+  *
+  */
 struct global_queue {
-	struct message_queue *head;
-	struct message_queue *tail;
-	int lock;
+	struct message_queue *head;     /*队头*/
+	struct message_queue *tail;       /*队尾*/
+	int lock;                                 /*锁*/
 };
 
-static struct global_queue *Q = NULL;
+static struct global_queue *Q = NULL; /*全局管理结构*/
 
-#define LOCK(q) while (__sync_lock_test_and_set(&(q)->lock,1)) {}
-#define UNLOCK(q) __sync_lock_release(&(q)->lock);
+#define LOCK(q) while (__sync_lock_test_and_set(&(q)->lock,1)) {}    /*原子获锁*/
+#define UNLOCK(q) __sync_lock_release(&(q)->lock);                     /*原子解锁*/       
 
+/**
+ * @brief 向全局消息队列中挂入一个
+ *    模块的消息队列
+ * @param[in|out] queue 待挂入的消息队列
+ *
+ */
 void 
 skynet_globalmq_push(struct message_queue * queue) {
 	struct global_queue *q= Q;
-
+	/*获取锁*/
 	LOCK(q)
+	/*将其链接入全局队列尾部*/
 	assert(queue->next == NULL);
 	if(q->tail) {
 		q->tail->next = queue;
@@ -54,9 +66,16 @@ skynet_globalmq_push(struct message_queue * queue) {
 	} else {
 		q->head = q->tail = queue;
 	}
+	/*释放锁*/
 	UNLOCK(q)
 }
 
+/**
+  * @brief 从全局消息管理中弹出一个
+  *   属于某个模块的消息队列
+  * @return 消息队列
+  *
+  */
 struct message_queue * 
 skynet_globalmq_pop() {
 	struct global_queue *q = Q;
@@ -75,6 +94,11 @@ skynet_globalmq_pop() {
 
 	return mq;
 }
+
+/**
+ * @brief 创建并初始化模块的全局队列
+ *
+ */
 
 struct message_queue * 
 skynet_mq_create(uint32_t handle) {

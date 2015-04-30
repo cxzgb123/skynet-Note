@@ -35,15 +35,20 @@
 
 #endif
 
+/**
+ *  @brief 每个模块对应一个消息队列
+ *         该模块运转时被一个真线程调度
+ *
+ */
 struct skynet_context {
-	void * instance;
-	struct skynet_module * mod;
+	void * instance;                 /*该模块初始化时产生的结构*/
+	struct skynet_module * mod;      /*该模块的处理消息的函数以及模块名*/
 	void * cb_ud;
 	skynet_cb cb;
-	struct message_queue *queue;
-	FILE * logfile;
+	struct message_queue *queue;    /*该模块的工作消息队列*/
+	FILE * logfile;                 /*该模块的日志文件*/
 	char result[32];
-	uint32_t handle;
+	uint32_t handle;                  
 	int session_id;
 	int ref;
 	bool init;
@@ -56,7 +61,7 @@ struct skynet_node {
 	int total;
 	int init;
 	uint32_t monitor_exit;
-	pthread_key_t handle_key;
+	pthread_key_t handle_key;       /*用于线程中的函数共享数据*/   
 };
 
 static struct skynet_node G_NODE;
@@ -66,11 +71,17 @@ skynet_context_total() {
 	return G_NODE.total;
 }
 
+/**
+ * @brief 原子加
+ */
 static void
 context_inc() {
 	__sync_fetch_and_add(&G_NODE.total,1);
 }
 
+/**
+ * @brief 原子减*/
+ */
 static void
 context_dec() {
 	__sync_fetch_and_sub(&G_NODE.total,1);
@@ -82,6 +93,7 @@ skynet_current_handle(void) {
 		void * handle = pthread_getspecific(G_NODE.handle_key);
 		return (uint32_t)(uintptr_t)handle;
 	} else {
+	      /*最大无符号整形作为错误标志*/
 		uintptr_t v = (uint32_t)(-THREAD_MAIN);
 		return v;
 	}
@@ -112,19 +124,29 @@ drop_message(struct skynet_message *msg, void *ud) {
 	skynet_send(NULL, source, msg->source, PTYPE_ERROR, 0, NULL, 0);
 }
 
+/* *
+  * @brief 创建一个模块管理结构
+  * @param[in] name 模块名，也做模块加载路径使用
+  * @param[in] param 额外参数
+  * @return 模块管理结构
+  */
 struct skynet_context * 
 skynet_context_new(const char * name, const char *param) {
+	/*加载模块*/
 	struct skynet_module * mod = skynet_module_query(name);
 
 	if (mod == NULL)
 		return NULL;
-
+	/*尝试调用注册的初始化函数初始化模块
+	实际上所有模块的初始化函数为同一个*/
 	void *inst = skynet_module_instance_create(mod);
 	if (inst == NULL)
 		return NULL;
+	/*申请更上层的模块管理结构并对
+	前面的模块管理结构包装*/
 	struct skynet_context * ctx = skynet_malloc(sizeof(*ctx));
 	CHECKCALLING_INIT(ctx)
-
+      /*ctx 作为上层的模块管理结构*/
 	ctx->mod = mod;
 	ctx->instance = inst;
 	ctx->ref = 2;

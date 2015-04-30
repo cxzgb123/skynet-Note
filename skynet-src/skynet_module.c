@@ -33,6 +33,8 @@ _try_open(struct modules *m, const char * name) {
 	char tmp[sz];
 	do
 	{
+		/*²ÎÊınameÊ¹ÓÃ; ·Ö¸îÂ·¾¶²¢×Ô¶¯¼ÓÔØ¸÷¸öÂ·¾¢¶ÔÓ¦µÄ¿â*/
+		/*@TODO  bug?¶à¸öÂ·¾¶Ö»¸øÉÏ²ã×îºóÒ»¸ödl*/
 		memset(tmp,0,sz);
 		while (*path == ';') path++;
 		if (*path == '\0') break;
@@ -74,6 +76,7 @@ _query(const char * name) {
 
 static int
 _open_sym(struct skynet_module *mod) {
+	/*³É¹¦¼ÓÔØµÄÄ£¿é»¹½«¼ÓÔØ¼¸¸öÄ¬ÈÏµÄ¿â*/
 	size_t name_size = strlen(mod->name);
 	char tmp[name_size + 9]; // create/init/release/signal , longest name is release (7)
 	memcpy(tmp, mod->name, name_size);
@@ -91,10 +94,11 @@ _open_sym(struct skynet_module *mod) {
 
 struct skynet_module * 
 skynet_module_query(const char * name) {
+	/*¼ì²éÊÇ·ñÒÑ¼ÓÔØ¸ÃÄ£¿é*/
 	struct skynet_module * result = _query(name);
 	if (result)
 		return result;
-
+      /*¼ÓËø*/
 	while(__sync_lock_test_and_set(&M->lock,1)) {}
 
 	result = _query(name); // double check
@@ -103,17 +107,19 @@ skynet_module_query(const char * name) {
 		int index = M->count;
 		void * dl = _try_open(M,name);
 		if (dl) {
+			/*½«¸ÃÄ£¿é´æ·ÅÈëÄ£¿é¹ÜÀí½á¹¹ë*/
 			M->m[index].name = name;
 			M->m[index].module = dl;
-
+			/*¼ÓÔØÄ¬ÈÏ¿â*/
 			if (_open_sym(&M->m[index]) == 0) {
 				M->m[index].name = skynet_strdup(name);
 				M->count ++;
+			/*·µ»Ø¸ÃÄ£¿éµÄ¹ÜÀí½á¹¹*/
 				result = &M->m[index];
 			}
 		}
 	}
-
+	/*½âËø*/
 	__sync_lock_release(&M->lock);
 
 	return result;
@@ -133,6 +139,7 @@ skynet_module_insert(struct skynet_module *mod) {
 
 void * 
 skynet_module_instance_create(struct skynet_module *m) {
+	/**/
 	if (m->create) {
 		return m->create();
 	} else {

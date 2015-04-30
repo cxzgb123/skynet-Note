@@ -266,16 +266,20 @@ struct socket_server *
 socket_server_create() {
 	int i;
 	int fd[2];
+	/*申请epoll管理结构*/
 	poll_fd efd = sp_create();
+	/*检查是否创建失败*/
 	if (sp_invalid(efd)) {
 		fprintf(stderr, "socket-server: create event pool failed.\n");
 		return NULL;
 	}
+	/*创建无名管道*/
 	if (pipe(fd)) {
 		sp_release(efd);
 		fprintf(stderr, "socket-server: create socket pair failed.\n");
 		return NULL;
 	}
+	/*监听无名管道读端*/
 	if (sp_add(efd, fd[0], NULL)) {
 		// add recvctrl_fd to event poll
 		fprintf(stderr, "socket-server: can't add server fd to event pool.\n");
@@ -285,12 +289,17 @@ socket_server_create() {
 		return NULL;
 	}
 
+      /*创建套接字全局管理结构*/
 	struct socket_server *ss = MALLOC(sizeof(*ss));
+	/*记录所属的管理结构*/
 	ss->event_fd = efd;
+	/*记录管道读端文件描述符*/
 	ss->recvctrl_fd = fd[0];
+	/*记录管道写端文件描述符*/
 	ss->sendctrl_fd = fd[1];
 	ss->checkctrl = 1;
 
+	/*遍历所有待使用的套接字管理槽并初始化*/
 	for (i=0;i<MAX_SOCKET;i++) {
 		struct socket *s = &ss->slot[i];
 		s->type = SOCKET_TYPE_INVALID;
