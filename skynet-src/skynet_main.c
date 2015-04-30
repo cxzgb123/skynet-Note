@@ -62,20 +62,34 @@ optstring(const char *key,const char * opt) {
 	return str;
 }
 
+/**
+  * @brief 获取环境变量
+  * @param[in|out] L lua句柄
+  * @note 遍历存放在一个表中的所有环境变量
+  * 将其中的条目设置为全局环境变量
+  *
+  */
 static void
 _init_env(lua_State *L) {
+	/*压入初始key*/
 	lua_pushnil(L);  /* first key */
+
+	/*尝试获取table的一个key-value对*/
 	while (lua_next(L, -2) != 0) {
+		/*获取key*/
 		int keyt = lua_type(L, -2);
 		if (keyt != LUA_TSTRING) {
 			fprintf(stderr, "Invalid config table\n");
 			exit(1);
 		}
 		const char * key = lua_tostring(L,-2);
+		/*获取value*/
 		if (lua_type(L,-1) == LUA_TBOOLEAN) {
+			/*bool值value根据真假将键设置为true或false*/
 			int b = lua_toboolean(L,-1);
 			skynet_setenv(key,b ? "true" : "false" );
 		} else {
+			/*非bool值则将key设置为指定的value值*/
 			const char * value = lua_tostring(L,-1);
 			if (value == NULL) {
 				fprintf(stderr, "Invalid config table key = %s\n", key);
@@ -83,8 +97,10 @@ _init_env(lua_State *L) {
 			}
 			skynet_setenv(key,value);
 		}
+		/*pop出value*/
 		lua_pop(L,1);
 	}
+	/*把table弹出*/
 	lua_pop(L,1);
 }
 
@@ -98,6 +114,10 @@ int sigign() {
 	return 0;
 }
 
+/**
+  * 获取文件中各个key对应的环境变量
+  * TODO 没看太懂
+  */
 static const char * load_config = "\
 	local config_name = ...\
 	local f = assert(io.open(config_name))\
@@ -110,6 +130,12 @@ static const char * load_config = "\
 	return result\
 ";
 
+/**
+  * @brief skynet 主函数
+  * @param[in] argc 参数个数
+  * @param[in]argvl[] 动参表
+  *
+  */
 int
 main(int argc, char *argv[]) {
 	const char * config_file = NULL ;
