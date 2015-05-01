@@ -31,14 +31,21 @@ struct handle_storage {
 
 static struct handle_storage *H = NULL;
 
+/**
+ * @brief 将该模块的管理结构注册到hash表中
+ * @param[in] ctx 模块的管理结构
+ * @return 模块ID
+ */
 uint32_t
 skynet_handle_register(struct skynet_context *ctx) {
+	/*模块全局管理结构*/
 	struct handle_storage *s = H;
 
 	rwlock_wlock(&s->lock);
 	
 	for (;;) {
 		int i;
+		/*遍历所有空位，寻找位置放该管理结构*/
 		for (i=0;i<s->slot_size;i++) {
 			uint32_t handle = (i+s->handle_index) & HANDLE_MASK;
 			int hash = handle & (s->slot_size-1);
@@ -52,6 +59,7 @@ skynet_handle_register(struct skynet_context *ctx) {
 				return handle;
 			}
 		}
+		/*倍增存放表*/
 		assert((s->slot_size*2 - 1) <= HANDLE_MASK);
 		struct skynet_context ** new_slot = skynet_malloc(s->slot_size * 2 * sizeof(struct skynet_context *));
 		memset(new_slot, 0, s->slot_size * 2 * sizeof(struct skynet_context *));
@@ -129,6 +137,11 @@ skynet_handle_retireall() {
 	}
 }
 
+/**
+  * @brief 获取该模块对应的管理结构
+  * @param[in] handle 模块ID
+  * @note 注意这里对每个模块管理结构是单例模式
+  */
 struct skynet_context * 
 skynet_handle_grab(uint32_t handle) {
 	struct handle_storage *s = H;
@@ -140,14 +153,20 @@ skynet_handle_grab(uint32_t handle) {
 	struct skynet_context * ctx = s->slot[hash];
 	if (ctx && skynet_context_handle(ctx) == handle) {
 		result = ctx;
+		/*将管理结构引用加一*/
 		skynet_context_grab(result);
 	}
 
 	rwlock_runlock(&s->lock);
-
+	/*返回管理结构*/
 	return result;
 }
 
+/**
+ * @brief 根据模块名称二分查找模块ID
+ * @param[in] name 模块名称
+ * 
+ */
 uint32_t 
 skynet_handle_findname(const char * name) {
 	struct handle_storage *s = H;
@@ -159,6 +178,7 @@ skynet_handle_findname(const char * name) {
 	int begin = 0;
 	int end = s->name_count - 1;
 	while (begin<=end) {
+		/*TODO 改成 (end - begin)/2 + begin 更好*/
 		int mid = (begin+end)/2;
 		struct handle_name *n = &s->name[mid];
 		int c = strcmp(n->name, name);
@@ -239,19 +259,28 @@ skynet_handle_namehandle(uint32_t handle, const char *name) {
 	return ret;
 }
 
+/**
+  * @brief 设置模块管理结构
+  * @param[in] harbor 节点ID
+  *  
+  */
 void 
 skynet_handle_init(int harbor) {
 	assert(H==NULL);
 	struct handle_storage * s = skynet_malloc(sizeof(*H));
+	/*默认空位数*/
 	s->slot_size = DEFAULT_SLOT_SIZE;
 	s->slot = skynet_malloc(s->slot_size * sizeof(struct skynet_context *));
 	memset(s->slot, 0, s->slot_size * sizeof(struct skynet_context *));
 
 	rwlock_init(&s->lock);
 	// reserve 0 for system
+
+	/*节点id站32bit高4位*/
 	s->harbor = (uint32_t) (harbor & 0xff) << HANDLE_REMOTE_SHIFT;
-	s->handle_index = 1;
-	s->name_cap = 2;
+	
+	s->handle_index = 1;   /*初始待使用槽索引为1*/
+	s->name_cap = 2;       /*名称容量为2*/
 	s->name_count = 0;
 	s->name = skynet_malloc(s->name_cap * sizeof(struct handle_name));
 

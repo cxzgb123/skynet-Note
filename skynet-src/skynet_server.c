@@ -148,10 +148,10 @@ skynet_context_new(const char * name, const char *param) {
 	struct skynet_context * ctx = skynet_malloc(sizeof(*ctx));
 	CHECKCALLING_INIT(ctx)
       /*ctx 作为上层的模块管理结构*/
-	ctx->mod = mod;
-	ctx->instance = inst;
-	ctx->ref = 2;
-	ctx->cb = NULL;
+	ctx->mod = mod;				/*模块的下层的管理结构*/
+	ctx->instance = inst;			/*下层模块初始化时获取到的结构*/
+	ctx->ref = 2;					/*设置模块的引用为2*/
+	ctx->cb = NULL;				
 	ctx->cb_ud = NULL;
 	ctx->session_id = 0;
 	ctx->logfile = NULL;
@@ -324,45 +324,66 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 	if (ctx == NULL) {
 		struct drop_t d = { handle };
 		skynet_mq_release(q, drop_message, &d);
+		/*本次取出模块队列但该队列对应的管理结构无效
+		    所以需要重新再取一个*/
+
+		/*弹出下一个待处理队列*/
 		return skynet_globalmq_pop();
 	}
 
 	int i,n=1;
 	struct skynet_message msg;
-
+	/**注意，这里根据有效载荷量和权重在计算弹出数量*/
 	for (i=0;i<n;i++) {
 		/*尝试从该模块的队列中出队一个消息*/
 		if (skynet_mq_pop(q,&msg)) {
+			/*该队列中的消息已经被取完了
+			   释放该模块管理的引用*/
 			skynet_context_release(ctx);
 			return skynet_globalmq_pop();
 		} else if (i==0 && weight >= 0) {
+			/*获取该队列的有效载荷*/
 			n = skynet_mq_length(q);
+			/*注意只有权重为正的队列，且本次该函数
+			    第一次进入时会改变弹出个数*/
+
+			/*根据第一取出队列的载荷和权重重置弹出数量*/
 			n >>= weight;
 		}
+		/*获取最后一个被弹出后队列的有效载荷*/
 		int overload = skynet_mq_overload(q);
+
+		/*队列超过负荷*/
 		if (overload) {
 			skynet_error(ctx, "May overload, message queue length = %d", overload);
 		}
 
+		/*类似看门狗*/
 		skynet_monitor_trigger(sm, msg.source , handle);
 
 		if (ctx->cb == NULL) {
+			/*对应的模块管理结构没有处理函数则
+			 直接清空该消息*/
 			skynet_free(msg.data);
 		} else {
+			/*使用模块注册的回掉函数处理该消息*/
 			dispatch_message(ctx, &msg);
 		}
-
+		/*类似看门狗*/
 		skynet_monitor_trigger(sm, 0,0);
 	}
 
 	assert(q == ctx->queue);
+	/*最后尝试取出一个模块消息队列*/
 	struct message_queue *nq = skynet_globalmq_pop();
 	if (nq) {
 		// If global mq is not empty , push q back, and return next queue (nq)
 		// Else (global mq is empty or block, don't push q back, and return q again (for next dispatch)
+			
 		skynet_globalmq_push(q);
 		q = nq;
 	} 
+	/*释放前面获取到的模块管理结构的引用*/
 	skynet_context_release(ctx);
 
 	return q;

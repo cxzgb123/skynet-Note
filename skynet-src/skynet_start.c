@@ -260,7 +260,9 @@ skynet_start(struct skynet_config * config) {
 			exit(1);
 		}
 	}
+	/*设置全局节点ID*/
 	skynet_harbor_init(config->harbor);
+	/*初始化模块管理结构*/
 	skynet_handle_init(config->harbor);
 	/*初始化消息队列管理结构，链式管理*/
 	skynet_mq_init();

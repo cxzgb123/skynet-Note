@@ -103,7 +103,7 @@ skynet_globalmq_pop() {
 struct message_queue * 
 skynet_mq_create(uint32_t handle) {
 	struct message_queue *q = skynet_malloc(sizeof(*q));
-	q->handle = handle;
+	q->handle = handle;			    /*╤сап╤тс╕╣ддё©И╣дid╨е*/
 	q->cap = DEFAULT_QUEUE_SIZE;     /*ц©╦Ждё©И╣дя╜╩╥╤сапд╛хо╢Сп║*/
 	q->head = 0;					    /*я╜╩╥╤сапм╥кВрЩЁУй╪╩╞*/
 	q->tail = 0;					    /*я╜╩╥╤сапн╡╟мЁУй╪╩╞*/	
@@ -112,13 +112,13 @@ skynet_mq_create(uint32_t handle) {
 	// set in_global flag to avoid push it to global queue .
 	// If the service init success, skynet_context_new will call skynet_mq_force_push to push it to global queue.
 	q->in_global = MQ_IN_GLOBAL;   /*╦ц╤саптзх╚╬ж╤сапжп*/
-	q->release = 0;			
-	q->overload = 0;
-	q->overload_threshold = MQ_OVERLOAD;
-	q->queue = skynet_malloc(sizeof(struct skynet_message) * q->cap);
-	q->next = NULL;
+	q->release = 0;			        /*╠Йж╬╤сап©у╪Дйг╥Я╣х╢Щйм╥е*/
+	q->overload = 0;				 /*╤сап╦╨╨и*/	
+	q->overload_threshold = MQ_OVERLOAD;   /*╤сапть╨и╦Эпб╣дд╛хо╥╖ж╣*/
+	q->queue = skynet_malloc(sizeof(struct skynet_message) * q->cap); /*иЙгК╤сап©у╪Д*/
+	q->next = NULL;						 /*а╛╫собр╩╦Ж╤сап*/
 
-	return q;
+	return q;								/*╥╣╩ьдё©И╤сап*/
 }
 
 /**
@@ -128,8 +128,8 @@ skynet_mq_create(uint32_t handle) {
 static void 
 _release(struct message_queue *q) {
 	assert(q->next == NULL);
-	skynet_free(q->queue);
-	skynet_free(q);
+	skynet_free(q->queue);					/*йм╥ея╜╩╥йЩвИ*/
+	skynet_free(q);						/*йм╥е╤сап╧эюМ╫А╧╧*/
 }
 
 /**
@@ -138,6 +138,7 @@ _release(struct message_queue *q) {
  */
 uint32_t 
 skynet_mq_handle(struct message_queue *q) {
+	/*╥╣╩ь╦ця╜╩╥╤сап╤тс╕дё©И╣дID*/
 	return q->handle;
 }
 
@@ -209,9 +210,10 @@ skynet_mq_pop(struct message_queue *q, struct skynet_message *message) {
 			length += cap;
 		}
 		/**жьжцть╨иЦпж╣╨мть╨и╪гб╪*/
+		/*TODO уБюО©иртсе╩╞*/
 		while (length > q->overload_threshold) {
-			q->overload = length;
-			q->overload_threshold *= 2;
+			q->overload = length;		/*иХжцть╨и*/
+			q->overload_threshold *= 2;	/*жьжцть╨иЦпж╣ё╛╠╤тЖ*/
 		}
 	} else {
 		// reset overload_threshold when queue is empty
@@ -295,40 +297,64 @@ skynet_mq_init() {
 	memset(q,0,sizeof(*q));
 	Q=q;
 }
-
+/**
+  * @brief ╫╚р╩╦Ждё©И╤сап╠Йж╬н╙╢Щйм╥е
+  * @param[in] q ╢Ьйм╥е╣ддё©ИоШо╒╤сап
+  * 
+  */
 void 
 skynet_mq_mark_release(struct message_queue *q) {
+	/*╩Ях║кЬ*/
 	LOCK(q)
+	/**йм╥е╠Йж╬н╢╠╩иХжцх╢╠╩йм╥ехон╙йг╢МнС╣д*/
 	assert(q->release == 0);
+
+	/*TODO уБ╦ЖиХжц╦п╬Уц╩╠ьр╙*/
+	/*иХжцйм╥е╠Йж╬*/
 	q->release = 1;
 	if (q->in_global != MQ_IN_GLOBAL) {
 		skynet_globalmq_push(q);
 	}
+	/*йм╥екЬ*/
 	UNLOCK(q)
 }
 
 /**
-  * @brief гЕ©ур╩╦Ждё©И╤сап
+  * @brief гЕ©ур╩╦Ждё©И╤са,╡╒╫╚фДи╬ЁЩп
   * @param[in] q ж╦оРдё©И╤сап
-  * @param[in] drop_func сцсзгЕ©у╤сап╣д╨╞йЩ
+  * @param[in] drop_func сцсзгЕ©у╤сап╣д╨╞й
+  * @param[in] ud гЕюМй╠пХр╙╣дфДкШ╡нйЩ
   */
 static void
 _drop_queue(struct message_queue *q, message_drop drop_func, void *ud) {
 	struct skynet_message msg;
+	/*гЕ©у╤сапюОцФ╣дйЩ╬щ*/
 	while(!skynet_mq_pop(q, &msg)) {
+		/*╣ВсцгЕюМ╨╞йЩгЕюМ*/
 		drop_func(&msg, ud);
 	}
+	/*йм╥е╦цоШо╒╤сап*/
 	_release(q);
 }
 
+/**
+  * @brief Ё╒йтйм╥е╤сап
+  * @param[in] q дё©И╤сапж╦уК
+  * @param[in] drop_func оШо╒╤╙фЗ╨╞йЩ
+  * @param[in] ud ╦цоШо╒╤тс╕╣ддё©ИID╣дж╦уК
+  *
+  */
 void 
 skynet_mq_release(struct message_queue *q, message_drop drop_func, void *ud) {
 	LOCK(q)
 	
-	if (q->release) {
+	if (q->release) { 
+		/*╦цдё©И╤сап╢ЩгЕюМ*/
 		UNLOCK(q)
+		/*гЕ©у╦ц╤сап*/
 		_drop_queue(q, drop_func, ud);
 	} else {
+		/*ц╩сп╠Й╪гн╙╢Щйм╥её╛╫╚╦ц╤сап╥ехКх╚╬ж╤сап*/
 		skynet_globalmq_push(q);
 		UNLOCK(q)
 	}

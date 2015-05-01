@@ -24,8 +24,14 @@ skynet_harbor_message_isremote(uint32_t handle) {
 	return h != HARBOR && h !=0;
 }
 
+/**
+  * @brief 设置全局harborID
+  * @param[in] harbor 节点ID
+  * 
+  */
 void
 skynet_harbor_init(int harbor) {
+      /*节点ID占32bit高4位*/
 	HARBOR = (unsigned int)harbor << HANDLE_REMOTE_SHIFT;
 }
 

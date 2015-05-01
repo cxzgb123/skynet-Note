@@ -139,7 +139,6 @@ skynet_module_insert(struct skynet_module *mod) {
 
 void * 
 skynet_module_instance_create(struct skynet_module *m) {
-	/**/
 	if (m->create) {
 		return m->create();
 	} else {
