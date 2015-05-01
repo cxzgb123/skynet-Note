@@ -17,48 +17,48 @@
 #define MQ_IN_GLOBAL 1
 #define MQ_OVERLOAD 1024
 
+/**
+ * @brief ©©©©©©©©©
+ * @note ©©©©©©©©©©
+ */
 struct message_queue {
 	uint32_t handle;
-	int cap;                             /*╤сап╢Сп║*/
-	int head;                           /*╤см╥кВрЩ*/
-	int tail;                             /*╤сн╡кВрЩ*/
-	int lock;                            /* ╤сапкЬ*/
-	int release;
-	int in_global;                     /*╠Йж╬╦ц╤сапйг╥Ятзх╚╬жоШо╒╤сапжп*/
-	int overload;
-	int overload_threshold;       /*╤сапбЗй╠╠Йв╒н╙MQ_OVERLOAD,©уй╠╩ж╦╢*/
-	struct skynet_message *queue;   /*╤сапж╦уК*/
-	struct message_queue *next;     /*сцсза╢╫схКх╚╬жоШо╒╧эюМ╫А╧╧*/
+	int cap;                             /*©©©©©©*/
+	int head;                            /*©©©©©©©*/
+	int tail;                            /*©©©©©©©©*/
+	int lock;                            /*©*/
+	int release;                         /*©©©©©©©*/
+	int in_global;                       /*©©©©©©©©©©©©©*/
+	int overload;                        /*©©©©*/
+	int overload_threshold;              /*©©©©©©*/ 
+	struct skynet_message *queue;        /*©©©©©©©©*/
+	struct message_queue *next;          /*©©©©©©©©©©©©©©©©©©©*/
 };
 
 /**
-  * @brief х╚╬жоШо╒╧эюМ╫А╧╧
-  * @note ╤саптквВё╛а╢╠М╧эюМ  
+  * @brief ©©©©©©©©
   *
   */
 struct global_queue {
-	struct message_queue *head;     /*╤см╥*/
-	struct message_queue *tail;       /*╤сн╡*/
-	int lock;                                 /*кЬ*/
+	struct message_queue *head;       /*©©*/
+	struct message_queue *tail;       /*©©*/
+	int lock;                         /*©*/
 };
 
-static struct global_queue *Q = NULL; /*х╚╬ж╧эюМ╫А╧╧*/
+static struct global_queue *Q = NULL;     /*©©©©©©*/
 
-#define LOCK(q) while (__sync_lock_test_and_set(&(q)->lock,1)) {}    /*т╜вс╩ЯкЬ*/
-#define UNLOCK(q) __sync_lock_release(&(q)->lock);                     /*т╜вс╫БкЬ*/       
+#define LOCK(q) while (__sync_lock_test_and_set(&(q)->lock,1)) {}      /*©©©*/
+#define UNLOCK(q) __sync_lock_release(&(q)->lock);                     /*©©©*/       
 
 /**
- * @brief х╚╬жоШо╒╤сапжп╧рхКр╩╦Ж
- *    дё©И╣доШо╒╤сап
- * @param[in|out] queue ╢Щ╧рхК╣доШо╒╤сап
+ * @brief ©©©©©©©©©©©©©©
+ * @param[in|out] queue ©©©©
  *
  */
 void 
 skynet_globalmq_push(struct message_queue * queue) {
 	struct global_queue *q= Q;
-	/*╩Ях║кЬ*/
 	LOCK(q)
-	/*╫╚фДа╢╫схКх╚╬ж╤сапн╡╡©*/
 	assert(queue->next == NULL);
 	if(q->tail) {
 		q->tail->next = queue;
@@ -66,16 +66,16 @@ skynet_globalmq_push(struct message_queue * queue) {
 	} else {
 		q->head = q->tail = queue;
 	}
-	/*йм╥екЬ*/
 	UNLOCK(q)
 }
 
+
+
 /**
-  * @brief ╢сх╚╬жоШо╒╧эюМжп╣╞ЁЖр╩╦Ж
-  *   йТсздЁ╦Ждё©И╣доШо╒╤сап
-  * @return оШо╒╤сап
-  *
-  */
+ * @brief ©©©©©©©©©©©©©©
+ * @param[in|out] queue ©©©©
+ *
+ */
 struct message_queue * 
 skynet_globalmq_pop() {
 	struct global_queue *q = Q;
@@ -96,56 +96,55 @@ skynet_globalmq_pop() {
 }
 
 /**
- * @brief ╢╢╫╗╡╒ЁУй╪╩╞дё©И╣дх╚╬ж╤сап
- * @param[handle] hanedle ╦цдё©И╣дкВрЩ
- * return ╥╣╩ь╦цдё©И╣д╤сап
+ * @brief ©©©©©©©©©
+ * @param[in] handle ©©©ID
+ * return ©©©©©©©
  */
 struct message_queue * 
 skynet_mq_create(uint32_t handle) {
 	struct message_queue *q = skynet_malloc(sizeof(*q));
-	q->handle = handle;			    /*╤сап╤тс╕╣ддё©И╣дid╨е*/
-	q->cap = DEFAULT_QUEUE_SIZE;     /*ц©╦Ждё©И╣дя╜╩╥╤сапд╛хо╢Сп║*/
-	q->head = 0;					    /*я╜╩╥╤сапм╥кВрЩЁУй╪╩╞*/
-	q->tail = 0;					    /*я╜╩╥╤сапн╡╟мЁУй╪╩╞*/	
-	q->lock = 0;					    /*я╜╩╥╤сапкЬ*/
+	q->handle = handle;			            /*©©©©©©©©©ID*/
+	q->cap = DEFAULT_QUEUE_SIZE;                        /*©©©©©©©©*/
+	q->head = 0;					    /*©©©©*/
+	q->tail = 0;					    /*©©©©*/	
+	q->lock = 0;					    /*©©©*/
 	// When the queue is create (always between service create and service init) ,
 	// set in_global flag to avoid push it to global queue .
 	// If the service init success, skynet_context_new will call skynet_mq_force_push to push it to global queue.
-	q->in_global = MQ_IN_GLOBAL;   /*╦ц╤саптзх╚╬ж╤сапжп*/
-	q->release = 0;			        /*╠Йж╬╤сап©у╪Дйг╥Я╣х╢Щйм╥е*/
-	q->overload = 0;				 /*╤сап╦╨╨и*/	
-	q->overload_threshold = MQ_OVERLOAD;   /*╤сапть╨и╦Эпб╣дд╛хо╥╖ж╣*/
-	q->queue = skynet_malloc(sizeof(struct skynet_message) * q->cap); /*иЙгК╤сап©у╪Д*/
-	q->next = NULL;						 /*а╛╫собр╩╦Ж╤сап*/
+	q->in_global = MQ_IN_GLOBAL;                        /*©©©©©©©*/
+	q->release = 0;			                    /*©©©©©©*/
+	q->overload = 0;				    /*©©©©*/	
+	q->overload_threshold = MQ_OVERLOAD;                /*©©©©©©©*/
+	q->queue = skynet_malloc(sizeof(struct skynet_message) * q->cap); /*©©©©©©©©*/
+	q->next = NULL;						 
 
-	return q;								/*╥╣╩ьдё©И╤сап*/
+	return q;								
 }
 
 /**
-  * @brief йм╥е╦цдё©И╣дя╜╩╥╤сап
-  * @param[in|out] q ж╦оР╣х╢Щйм╥е╣дя╜╩╥╤сап 
+  * @brief ©©©©©©©©
+  * @param[in|out] q ©©©©©©©
   */
 static void 
 _release(struct message_queue *q) {
 	assert(q->next == NULL);
-	skynet_free(q->queue);					/*йм╥ея╜╩╥йЩвИ*/
-	skynet_free(q);						/*йм╥е╤сап╧эюМ╫А╧╧*/
+	skynet_free(q->queue);					
+	skynet_free(q);					
 }
 
 /**
- * @brief ╥╣╩ь╦ця╜╩╥╤сапкЫйТ╣ддё©И
- * @return дё©ИкВрЩ
+ * @brief ©©©©©©©©©ID
+ * @return ©©ID
  */
 uint32_t 
 skynet_mq_handle(struct message_queue *q) {
-	/*╥╣╩ь╦ця╜╩╥╤сап╤тс╕дё©И╣дID*/
 	return q->handle;
 }
 
 /**
-  * @brief ╥╣╩ьдё©Ия╜╩╥╤сап╣дЁ╓╤х
-  * @param[in|out] q дё©И╣д╤сапж╦уК
-  * @return дё©И╣д╤сапЁ╓╤х
+  * @brief ©©©©©©©©©©©©
+  * @param[in|out] q ©©©©
+  * @return ©©©©©©©©
   */
 int
 skynet_mq_length(struct message_queue *q) {
@@ -165,9 +164,9 @@ skynet_mq_length(struct message_queue *q) {
 }
 
 /**
-  * @brief ╣╞ЁЖ╦╨╨иж╣, ╡╒╫╚т╜ю╢╣дж╣жцн╙ 1
+  * @brief ©©©©©©©©©©©©©©
   * @param[in] q ж╦оР╢Щ╢╕юМ╣дя╜╩╥╤сап
-  * @return ть╨и╢Сп║
+  * @return ©©©©
   *
   */
 int
@@ -181,114 +180,107 @@ skynet_mq_overload(struct message_queue *q) {
 }
 
 /**
-  * @brief оШо╒ЁЖ╤с
-  * @param[out|out] message_queue дё©ИоШо╒╧эюМ╤сап
-  * @param[out] message сцсз╢Ф╥еЁЖ╤с╣доШо╒
+  * @brief ©©©©©©©©©©©©
+  * @param[out|out] q ©©©©
+  * @param[out] message ©©©©©©©
   *
   */
 int
 skynet_mq_pop(struct message_queue *q, struct skynet_message *message) {
 	int ret = 1;
-	/*╩Ях║кЬ*/
-	LOCK(q)              
-      /*еп╤о╤сапжпйг╥Я╩╧спт╙кь*/            
+	/*©©*/
+	LOCK(q)  
+	/*©©©©©©©*/
 	if (q->head != q->tail) {
-		/*╣╠╤сапжпспйЩ╬щй╠, охх║ЁЖр╩╦Ж*/
+		/*©©©©©©*/
 		*message = q->queue[q->head++];
 		ret = 0;
 		int head = q->head;
 		int tail = q->tail;
 		int cap = q->cap;
 
-	      /*╣╠╥╒ожм╥╡©╣╫╢ОйЩвИн╡╟мй╠пХжьжц╣╫м╥╡©*/
+
 		if (head >= cap) {
 			q->head = head = 0;
 		}
-		/*╪фкЦспп╖ть╨и*/
+
+		/*©©©©©©*/
+		/*TODO ©©©©©©©©*/
 		int length = tail - head;
 		if (length < 0) {
 			length += cap;
 		}
-		/**жьжцть╨иЦпж╣╨мть╨и╪гб╪*/
-		/*TODO уБюО©иртсе╩╞*/
+		
+		/*©©©©©©©©©*/
 		while (length > q->overload_threshold) {
-			q->overload = length;		/*иХжцть╨и*/
-			q->overload_threshold *= 2;	/*жьжцть╨иЦпж╣ё╛╠╤тЖ*/
+			q->overload = length;		
+			q->overload_threshold *= 2;	
 		}
 	} else {
+	        /*©©©©©©©©*/
+	        /*TODO ©©©©©©©©*/
 		// reset overload_threshold when queue is empty
 		q->overload_threshold = MQ_OVERLOAD;
 	}
-      /*╣╠╥╒ождё©И╣д╤сап©уй╠ё╛иХжц╤сап╠Йж╬
-          н╙╡╩тзх╚╬ж╤сапжп*/
+	/*©©©©©©©©©©©©©©©©©©*/
 	if (ret) {
 		q->in_global = 0;
 	}
-	/*йм╥екЬ*/
 	UNLOCK(q) 
 
 	return ret;
 }
 
 /**
-  * @brief дё©И╤сапю╘уе
-  * @param[in|out] q ж╦оРдё©И╤сап
+  * @brief ©©©©©©©©©©
+  * @param[in|out] q ©©©©©©
   *
   */
 static void
 expand_queue(struct message_queue *q) {
-	/*иЙгК╠╤тЖ©у╪Д*/
+	/*©©©©©©©*/
 	struct skynet_message *new_queue = skynet_malloc(sizeof(struct skynet_message) * q->cap * 2);
 	int i;
-	/*TODO bug уБюОйг╥Я©иртсе╩╞*/
-	/*©╫╠╢©у╪Д*/
+	/*TODO ©©©©©*/
+	/*©©©©*/
 	for (i=0;i<q->cap;i++) {
 		new_queue[i] = q->queue[(q->head + i) % q->cap];
 	}
-	/*иХжцйТпт*/
 	q->head = 0;
 	q->tail = q->cap;
 	q->cap *= 2;
 	/*йм╥е╬и©у╪Д*/
 	skynet_free(q->queue);
-	/*жьиХжц©у╪Дж╦уК*/
 	q->queue = new_queue;
 }
 /**
-  * @brief оРдё©И╤сапжпмфкмр╩╦Жmessage
-  * @param[in|out] ж╦оРдё©И╤сап╣дж╦уК
-  * @param[in] message ╢ЩмфхК╣доШо╒
+  * @brief ©©©©©©©©©©©©
+  * @param[in|out] q ©©©©
+  * @param[in] message ©©©©©©
   *
   */
 void 
 skynet_mq_push(struct message_queue *q, struct skynet_message *message) {
 	assert(message);
-	/*©╙кЬ*/
 	LOCK(q)
-      /*мфхКоШо╒*/
 	q->queue[q->tail] = *message;
-	/*Ё╛╧ЩйЩвИн╡╟мтРжьжцtail╣двЬ╠Йн╙0*/
 	if (++ q->tail >= q->cap) {
 		q->tail = 0;
 	}
-
-	/*╥╒ож╤сапбЗакё╛тР╫╚╤сап╠╤тЖ*/
+        /*©©©©©©©©©©©©*/
 	if (q->head == q->tail) {
 		expand_queue(q);
 	}
-      /*дё©И╤сапжплНЁДакпбйЩ╬щ╣╚
-           ╥╒ож╦ц╤сапц╩╧рхКх╚╬ж╤саппХр╙╫╚фД╧рхКх╚╬ж╤сап*/
+	/*©©©©©©©©©©©©©©©©©©©©©©©©©©©©©©©©©©©*/
 	if (q->in_global == 0) {
-		/*иХжц╠Йж╬╧рхКх╚╬ж╤сап*/
 		q->in_global = MQ_IN_GLOBAL;
 		skynet_globalmq_push(q);
 	}
-	/*╫БкЬ*/
 	UNLOCK(q)
 }
 
 /**
- * @brief ЁУй╪╩╞х╚╬ж╧эюМ╤сап
+ * @brief ©©©©©©©©
  *
  */
 void 
@@ -298,63 +290,57 @@ skynet_mq_init() {
 	Q=q;
 }
 /**
-  * @brief ╫╚р╩╦Ждё©И╤сап╠Йж╬н╙╢Щйм╥е
-  * @param[in] q ╢Ьйм╥е╣ддё©ИоШо╒╤сап
+  * @brief ©©©©©©©©
+  * @param[in] q ©©©©
   * 
   */
 void 
 skynet_mq_mark_release(struct message_queue *q) {
-	/*╩Ях║кЬ*/
 	LOCK(q)
-	/**йм╥е╠Йж╬н╢╠╩иХжцх╢╠╩йм╥ехон╙йг╢МнС╣д*/
 	assert(q->release == 0);
-
-	/*TODO уБ╦ЖиХжц╦п╬Уц╩╠ьр╙*/
-	/*иХжцйм╥е╠Йж╬*/
+	/*©©©©©©©*/
 	q->release = 1;
+	/*©©©©©©©©©©©©©©©©©©*/
 	if (q->in_global != MQ_IN_GLOBAL) {
 		skynet_globalmq_push(q);
 	}
-	/*йм╥екЬ*/
 	UNLOCK(q)
 }
 
 /**
-  * @brief гЕ©ур╩╦Ждё©И╤са,╡╒╫╚фДи╬ЁЩп
-  * @param[in] q ж╦оРдё©И╤сап
-  * @param[in] drop_func сцсзгЕ©у╤сап╣д╨╞й
-  * @param[in] ud гЕюМй╠пХр╙╣дфДкШ╡нйЩ
+  * @brief ©©©©©©
+  * @param[in] q ©©©©
+  * @param[in] drop_func ©©©©©©
+  * @param[in] ud  ©©©©
   */
 static void
 _drop_queue(struct message_queue *q, message_drop drop_func, void *ud) {
 	struct skynet_message msg;
-	/*гЕ©у╤сапюОцФ╣дйЩ╬щ*/
+	/*©©©©©©*/
 	while(!skynet_mq_pop(q, &msg)) {
-		/*╣ВсцгЕюМ╨╞йЩгЕюМ*/
+	         /*©©©©*/
 		drop_func(&msg, ud);
 	}
-	/*йм╥е╦цоШо╒╤сап*/
+	/*©©©©*/
 	_release(q);
 }
 
 /**
-  * @brief Ё╒йтйм╥е╤сап
-  * @param[in] q дё©И╤сапж╦уК
-  * @param[in] drop_func оШо╒╤╙фЗ╨╞йЩ
-  * @param[in] ud ╦цоШо╒╤тс╕╣ддё©ИID╣дж╦уК
+  * @brief ©©©©©©©©
+  * @param[in] q ©©©©
+  * @param[in] drop_func ©©©©©©
+  * @param[in] ud ©©id
   *
   */
 void 
 skynet_mq_release(struct message_queue *q, message_drop drop_func, void *ud) {
 	LOCK(q)
-	
 	if (q->release) { 
-		/*╦цдё©И╤сап╢ЩгЕюМ*/
 		UNLOCK(q)
-		/*гЕ©у╦ц╤сап*/
+		/*©©©©©©©©©©©©©*/
 		_drop_queue(q, drop_func, ud);
 	} else {
-		/*ц╩сп╠Й╪гн╙╢Щйм╥её╛╫╚╦ц╤сап╥ехКх╚╬ж╤сап*/
+	        /*©©©©©©©©©©*/
 		skynet_globalmq_push(q);
 		UNLOCK(q)
 	}
