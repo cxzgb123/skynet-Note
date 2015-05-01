@@ -213,19 +213,30 @@ skynet_context_reserve(struct skynet_context *ctx) {
 	context_dec();
 }
 
+/**
+  * @brief 删除一个模块
+  * @param[in|out] 指向待删除的模块
+  */
 static void 
 delete_context(struct skynet_context *ctx) {
+	/*关闭日志文件*/
 	if (ctx->logfile) {
 		fclose(ctx->logfile);
 	}
+	/*释放模块自己使用的常驻结构*/
 	skynet_module_instance_release(ctx->mod, ctx->instance);
 	skynet_mq_mark_release(ctx->queue);
 	skynet_free(ctx);
 	context_dec();
 }
-
+/**
+  * @brief 减小模块的引用，类似智能指针的使用方式
+  * @param[in] ctx 待减小的智能指针
+  * return (模块被释放 ?  null : 模块的指针)
+  */
 struct skynet_context * 
 skynet_context_release(struct skynet_context *ctx) {
+	/*减小引用*/
 	if (__sync_sub_and_fetch(&ctx->ref,1) == 0) {
 		delete_context(ctx);
 		return NULL;
@@ -292,15 +303,24 @@ skynet_context_dispatchall(struct skynet_context * ctx) {
 
 struct message_queue * 
 skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue *q, int weight) {
+	/*目前q参数必定为NULL*/
 	if (q == NULL) {
+		/*尝试从全局队列中取出一个模块的队列*/
 		q = skynet_globalmq_pop();
+		/*没取到返回NULL，表明此时用户数据较少
+		  导致worker线程过多*/
 		if (q==NULL)
 			return NULL;
 	}
 
+	 /*找到该工作队列对应的KEY*/
 	uint32_t handle = skynet_mq_handle(q);
-
+      /*使用该关键字检索该队列对应的
+          模块的管理结构*/
 	struct skynet_context * ctx = skynet_handle_grab(handle);
+
+	/*没找到则将该模块的队列从全局队列中取出*/  
+	/*TODO 更多研究*/
 	if (ctx == NULL) {
 		struct drop_t d = { handle };
 		skynet_mq_release(q, drop_message, &d);
@@ -311,6 +331,7 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 	struct skynet_message msg;
 
 	for (i=0;i<n;i++) {
+		/*尝试从该模块的队列中出队一个消息*/
 		if (skynet_mq_pop(q,&msg)) {
 			skynet_context_release(ctx);
 			return skynet_globalmq_pop();

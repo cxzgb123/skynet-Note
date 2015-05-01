@@ -17,15 +17,15 @@
 #include <string.h>
 
 struct monitor {
-	int count;
-	struct skynet_monitor ** m;
-	pthread_cond_t cond;
-	pthread_mutex_t mutex;
+	int count;                               /*监视器数量*/
+	struct skynet_monitor ** m;       /*存放各个真线程使用的moniter*/
+	pthread_cond_t cond;              /*条件锁*/ 
+	pthread_mutex_t mutex;           /*互斥锁*/
 	int sleep;
 };
 
 struct worker_parm {
-	struct monitor *m;
+	struct monitor *m;       
 	int id;
 	int weight;
 };
@@ -129,8 +129,10 @@ _worker(void *p) {
 	struct skynet_monitor *sm = m->m[id]
 	/*向该线程私有空间传入THREAD_WORKER*/;
 	skynet_initthread(THREAD_WORKER);
+	/*q置为null*/
 	struct message_queue * q = NULL;
 	for (;;) {
+		/*尝试取出某个模块的工作队列*/
 		q = skynet_context_message_dispatch(sm, q, weight);
 		if (q == NULL) {
 			if (pthread_mutex_lock(&m->mutex) == 0) {
