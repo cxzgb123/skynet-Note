@@ -145,9 +145,13 @@ skynet_context_new(const char * name, const char *param) {
 		return NULL;
 	/*申请更上层的模块管理结构并对
 	前面的模块管理结构包装*/
+
+	/*TODO bug ? 需要强制转换*/
 	struct skynet_context * ctx = skynet_malloc(sizeof(*ctx));
+
 	CHECKCALLING_INIT(ctx)
-      /*ctx 作为上层的模块管理结构*/
+
+        /*ctx 作为上层的模块管理结构*/
 	ctx->mod = mod;				/*模块的下层的管理结构*/
 	ctx->instance = inst;			/*下层模块初始化时获取到的结构*/
 	ctx->ref = 2;			        /*设置模块的引用为2*/

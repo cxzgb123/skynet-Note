@@ -11,15 +11,25 @@
 
 #define MAX_MODULE_TYPE 32
 
+/***
+ * @brief manager of all module
+ */
 struct modules {
-	int count;
-	int lock;
-	const char * path;
-	struct skynet_module m[MAX_MODULE_TYPE];
+	int count;                              /*nums module loaded*/
+	int lock;                               /*lock */
+	const char * path;                      /*待装载的模块目录*/
+	struct skynet_module m[MAX_MODULE_TYPE];/*存放装载的模块*/
 };
 
-static struct modules * M = NULL;
+static struct modules * M = NULL;               /*实例化一个模块管理结构*/
 
+/**
+ * @brief 从制定文件将模块信息进行加载
+ * @param[out] 模块指针
+ * @param[in]  模块名称
+ * @note 这里实际是尝试在path指定的所有目录尝试查找并加载该库
+ * @return 
+ */
 static void *
 _try_open(struct modules *m, const char * name) {
 	const char *l;
@@ -33,11 +43,12 @@ _try_open(struct modules *m, const char * name) {
 	char tmp[sz];
 	do
 	{
-		/*����nameʹ��; �ָ�·�����Զ����ظ���·����Ӧ�Ŀ�*/
-		/*@TODO  bug?���·��ֻ���ϲ����һ��dl*/
 		memset(tmp,0,sz);
+		/*过滤开始的 ; */
 		while (*path == ';') path++;
 		if (*path == '\0') break;
+
+		/*尝试以;结尾切割一个字串*/
 		l = strchr(path, ';');
 		if (l == NULL) l = path + strlen(path);
 		int len = l - path;
@@ -52,6 +63,7 @@ _try_open(struct modules *m, const char * name) {
 			fprintf(stderr,"Invalid C service path\n");
 			exit(1);
 		}
+		/*立即解析该库， 且其后的函数能使用该库的函数*/
 		dl = dlopen(tmp, RTLD_NOW | RTLD_GLOBAL);
 		path = l;
 	}while(dl == NULL);
@@ -59,10 +71,15 @@ _try_open(struct modules *m, const char * name) {
 	if (dl == NULL) {
 		fprintf(stderr, "try open %s failed : %s\n",name,dlerror());
 	}
-
+        
+        /*返回被加载的库*/
 	return dl;
 }
 
+/**
+ * @brief 检查是否有同名模块
+ * @return 找到同名模块? 模块指针 ： NULL
+ */
 static struct skynet_module * 
 _query(const char * name) {
 	int i;
@@ -74,52 +91,67 @@ _query(const char * name) {
 	return NULL;
 }
 
+/**
+ * @brief 尝试将库中的几个固定回调函数加载
+ * @param[in] mod 模块库指针
+ * @return 是否成功加载 init 函数 ? true : false
+ */ 
 static int
 _open_sym(struct skynet_module *mod) {
-	/*�ɹ����ص�ģ�黹�����ؼ���Ĭ�ϵĿ�*/
 	size_t name_size = strlen(mod->name);
 	char tmp[name_size + 9]; // create/init/release/signal , longest name is release (7)
 	memcpy(tmp, mod->name, name_size);
+	/*加载create 回调*/
 	strcpy(tmp+name_size, "_create");
-	mod->create = dlsym(mod->module, tmp);
+	mod->create = dlsym(mod->module, tmp);a
+	/*加载初始化模块回调*/
 	strcpy(tmp+name_size, "_init");
 	mod->init = dlsym(mod->module, tmp);
+	/*加载模块释放回调*/
 	strcpy(tmp+name_size, "_release");
 	mod->release = dlsym(mod->module, tmp);
+	/*加载信号处理回调*/
 	strcpy(tmp+name_size, "_signal");
 	mod->signal = dlsym(mod->module, tmp);
-
 	return mod->init == NULL;
 }
 
+/**
+ * @brief 尝试加载一个制定的模块
+ * @param[in] name 模块名称
+ * @return 成功 ? 模块的指针:NULL
+ */
 struct skynet_module * 
 skynet_module_query(const char * name) {
-	/*����Ƿ��Ѽ��ظ�ģ��*/
+        /*查看该模块是否已经加载*/
 	struct skynet_module * result = _query(name);
 	if (result)
 		return result;
-      /*����*/
+        /*获取锁*/
 	while(__sync_lock_test_and_set(&M->lock,1)) {}
-
+        
+        /*再次检查*/
 	result = _query(name); // double check
-
+        
+        /*不存在同名模块，且模块存储器未超过容量*/
 	if (result == NULL && M->count < MAX_MODULE_TYPE) {
+	        /*获取空位索引*/
 		int index = M->count;
+                
+                /*加载库*/
 		void * dl = _try_open(M,name);
 		if (dl) {
-			/*����ģ������ģ������ṹ�*/
+		        /*将库放入槽位*/
 			M->m[index].name = name;
 			M->m[index].module = dl;
-			/*����Ĭ�Ͽ�*/
+			/*加载模块的回调函数*/
 			if (_open_sym(&M->m[index]) == 0) {
 				M->m[index].name = skynet_strdup(name);
 				M->count ++;
-			/*���ظ�ģ��Ĺ����ṹ*/
 				result = &M->m[index];
 			}
 		}
 	}
-	/*����*/
 	__sync_lock_release(&M->lock);
 
 	return result;
