@@ -17,10 +17,10 @@
 #include <string.h>
 
 struct monitor {
-	int count;                               /*监视器数量*/
+	int count;                        /*监视器数量*/
 	struct skynet_monitor ** m;       /*存放各个真线程使用的moniter*/
 	pthread_cond_t cond;              /*条件锁*/ 
-	pthread_mutex_t mutex;           /*互斥锁*/
+	pthread_mutex_t mutex;            /*互斥锁*/
 	int sleep;
 };
 
@@ -40,6 +40,12 @@ create_thread(pthread_t *thread, void *(*start_routine) (void *), void *arg) {
 	}
 }
 
+/**
+ * @brief 尝试唤醒单个线程
+ * @param[in] m 全局监视器
+ * @param[in] busy 
+ *
+ */
 static void
 wakeup(struct monitor *m, int busy) {
 	if (m->sleep >= m->count - busy) {
@@ -115,6 +121,10 @@ _timer(void *p) {
 	return NULL;
 }
 
+/**
+ * @brief 工作线程尝试不断取出模块消息队列进行处理
+ * @note 当取出失败时表明这是负荷很低，需要进行睡眠来减少cpu损耗
+ */
 static void *
 _worker(void *p) {
 	/*该线程的信息*/
@@ -225,9 +235,9 @@ _start(int thread) {
 }
 
 /**
-  * @brief 遍历所有cmd列出的模块，并全部进行加载
+  * @brief 加载bootstrap模块
   * @param[out] logger 用于输出信息
-  * @param[in] cmdline 各个模块的路径
+  * @param[in] 模块路径
   *
   */
 static void
@@ -279,7 +289,8 @@ skynet_start(struct skynet_config * config) {
 		fprintf(stderr, "Can't launch logger service\n");
 		exit(1);
 	}
-      /*加载模块*/
+        
+        /*加载模块*/
 	bootstrap(ctx, config->bootstrap);
 
 	/*启动各个真线程，开始处理业务*/

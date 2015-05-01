@@ -14,11 +14,10 @@
 #include <assert.h>
 
 /**
-  * @brief ³¢ÊÔ»ñÈ¡key¶ÔÓ¦µÄval£¬Èç¹ûÎ´¶¨Òå
-  *    Ôò½«ÆäÉèÖÃÎªopt¶ÔÓ¦µÄÖ²²¢·µ»
-  * @param[in] key ¹Ø¼ü×Ö
-  * @param[in] opt Öµ
-  */
+ * @brief æŸ¥çœ‹keyå¯¹åº”çš„valæ˜¯å¦å­˜åœ¨ï¼Œä¸å†åˆ™è®¾ç½®ä¸ºopt
+ * @param[in] key é”®
+ * @param[in] opt æ•°å€¼
+ */
 static int
 optint(const char *key, int opt) {
 	const char * str = skynet_getenv(key);
@@ -43,12 +42,12 @@ optboolean(const char *key, int opt) {
 }
 */
 
+
 /**
-  * @brief ³¢ÊÔ»ñÈ¡key¶ÔÓ¦µÄval£¬Èç¹ûÎ´¶¨Òå
-  *    Ôò½«ÆäÉèÖÃÎªopt¶ÔÓ¦µÄÖ²²¢·µ»
-  * @param[in] key ¹Ø¼ü×Ö
-  * @param[in] opt Öµ
-  */
+ * @brief æŸ¥çœ‹keyå¯¹åº”çš„valæ˜¯å¦å­˜åœ¨ï¼Œä¸å†åˆ™è®¾ç½®ä¸ºopt
+ * @param[in] key é”®
+ * @param[in] opt æ•°å€¼
+ */
 static const char *
 optstring(const char *key,const char * opt) {
 	const char * str = skynet_getenv(key);
@@ -63,33 +62,29 @@ optstring(const char *key,const char * opt) {
 }
 
 /**
-  * @brief »ñÈ¡»·¾³±äÁ¿
-  * @param[in|out] L lua¾ä±ú
-  * @note ±éÀú´æ·ÅÔÚÒ»¸ö±íÖĞµÄËùÓĞ»·¾³±äÁ¿
-  * ½«ÆäÖĞµÄÌõÄ¿ÉèÖÃÎªÈ«¾Ö»·¾³±äÁ¿
-  *
-  */
+ * @brief luaçš„è¡¨ä¸­æå–æ‰€æœ‰é”®å€¼å¯¹å¹¶å°†å…¶è®¾ç½®ä¸ºå…¨å±€å˜é‡
+ * @param[in|out] L lua å¥æŸ„
+ *
+ */
 static void
 _init_env(lua_State *L) {
-	/*Ñ¹Èë³õÊ¼key*/
+	/*pushå…¥nil*/
 	lua_pushnil(L);  /* first key */
 
-	/*³¢ÊÔ»ñÈ¡tableµÄÒ»¸ökey-value¶Ô*/
+        /*å°è¯•å–ä¸€ä¸ªé”®å€¼å¯¹*/
 	while (lua_next(L, -2) != 0) {
-		/*»ñÈ¡key*/
+	        /*æå–é”®*/
 		int keyt = lua_type(L, -2);
 		if (keyt != LUA_TSTRING) {
 			fprintf(stderr, "Invalid config table\n");
 			exit(1);
 		}
 		const char * key = lua_tostring(L,-2);
-		/*»ñÈ¡value*/
+		/*æå–å€¼*/
 		if (lua_type(L,-1) == LUA_TBOOLEAN) {
-			/*boolÖµvalue¸ù¾İÕæ¼Ù½«¼üÉèÖÃÎªtrue»òfalse*/
 			int b = lua_toboolean(L,-1);
 			skynet_setenv(key,b ? "true" : "false" );
 		} else {
-			/*·ÇboolÖµÔò½«keyÉèÖÃÎªÖ¸¶¨µÄvalueÖµ*/
 			const char * value = lua_tostring(L,-1);
 			if (value == NULL) {
 				fprintf(stderr, "Invalid config table key = %s\n", key);
@@ -97,15 +92,13 @@ _init_env(lua_State *L) {
 			}
 			skynet_setenv(key,value);
 		}
-		/*pop³övalue*/
 		lua_pop(L,1);
 	}
-	/*°Ñtableµ¯³ö*/
 	lua_pop(L,1);
 }
 
 /**
-  * @brief ÓÃÓÚÆÁ±Î¹ÜµÀÆÆÁÑ
+  * @brief å±è”½ç®¡é“ç ´è£‚
   */
 int sigign() {
 	struct sigaction sa;
@@ -115,8 +108,8 @@ int sigign() {
 }
 
 /**
-  * »ñÈ¡ÎÄ¼şÖĞ¸÷¸ökey¶ÔÓ¦µÄ»·¾³±äÁ¿
-  * TODO Ã»¿´Ì«¶®
+  * @brief è¯»å–é…ç½®æ–‡ä»¶ï¼Œå¹¶å°†é…ç½®æ–‡ä»¶ä¸­æ˜¯ç¯å¢ƒè¡¨é‡çš„å€¼è¿›è¡Œæ›¿æ¢ï¼Œç„¶åè®¾ç½®å…¨å±€å˜é‡
+  * 
   */
 static const char * load_config = "\
 	local config_name = ...\
@@ -131,38 +124,39 @@ static const char * load_config = "\
 ";
 
 /**
-  * @brief skynet Ö÷º¯Êı
-  * @param[in] argc ²ÎÊı¸öÊı
-  * @param[in]argvl[] ¶¯²Î±í
+  * @brief skynet ä¸»å‡½æ•°
   *
   */
 int
 main(int argc, char *argv[]) {
 	const char * config_file = NULL ;
 	if (argc > 1) {
-		/*´Ó²ÎÊı»ñÈ¡ÅäÖÃÎÄ¼şÂ·¾¶*/
+	        /*å¿…é¡»åˆ¶å®šé…ç½®æ–‡ä»¶è·¯å¾„*/
 		config_file = argv[1];
 	} else {
 		fprintf(stderr, "Need a config file. Please read skynet wiki : https://github.com/cloudwu/skynet/wiki/Config\n"
 			"usage: skynet configfilename\n");
 		return 1;
 	}
-
-	/*³õÊ¼»¯Ïß³Ì¹²Ïí²ÎÊı*/
+        
+        /*åˆå§‹åŒ–å…¨å±€æ•°æ®*/
 	skynet_globalinit();
-	/*¼ÓÔØlua»·¾³*/
+	
+	/*ç”³è¯·luaå¥æŸ„*/
 	skynet_env_init();
-	/*ÆÁ±Î¹ÜµÀÆÆÁÑ*/
+        
+        /*å±è”½ç®¡é“ç ´è£‚*/
 	sigign();
-      /*¼ÓÔØluaÄ£¿é*/
+
 	struct skynet_config config;
 
-      /*³õÊ¼lua½»»¥½á¹¹*/
+        /*æ‰“å¼€luaçŠ¶æ€, åˆå§‹luaå¥æŸ„*/
 	struct lua_State *L = lua_newstate(skynet_lalloc, NULL);
-	 /*¼ÓÔØÖ¸¶¨lua¿â*/
+
+	/*æ‰“å¼€å¤šä¸ªluaåº“*/
 	luaL_openlibs(L);	// link lua lib
 
-	/*¼ÓÔØÅäÖÃÎÄ¼ş*/
+        /*åŠ è½½é…ç½®æ–‡ä»¶*/
 	int err = luaL_loadstring(L, load_config);
 	assert(err == LUA_OK);
 	
@@ -174,26 +168,24 @@ main(int argc, char *argv[]) {
 		lua_close(L);
 		return 1;
 	}
+	/*ä½¿ç”¨é…ç½®æ–‡ä»¶çš„key-valè®¾ç½®ç¯å¢ƒå˜é‡*/
 	_init_env(L);
 
+        /*é…ç½®æ–‡ä»¶æ²¡è®¾ç½®çš„å°†è®¾ç½®ä¸ºé»˜è®¤å¤§å°*/
+        /*TODO å¯ä»¥åœ¨å»ºç«‹ä¸€ä¸ªé»˜è®¤é…ç½®æ–‡ä»¶æ¥å®ç°ï¼Œå¢åŠ çµæ´»æ€§*/
 	config.thread =  optint("thread",8);
-	/*³¢ÊÔ»ñÈ¡threadµÄÖµ£¬Ä¬ÈÏÉèÖÃÎª 8*/
 	config.module_path = optstring("cpath","./cservice/?.so");
-	/*³¢ÊÔ»ñÈ¡harborµÄÖµ£¬Ä¬ÈÏÉèÖÃÎª 1*/
 	config.harbor = optint("harbor", 1);
-	/*³¢ÊÔ»ñÈ¡bootstrapµÄÖµ£¬Ä¬ÈÏÉèÖÃÎª bootstrap*/
 	config.bootstrap = optstring("bootstrap","snlua bootstrap");
-	/*³¢ÊÔ»ñÈ¡daemonµÄÖµ*/
 	config.daemon = optstring("daemon", NULL);
-	/*³¢ÊÔ»ñÈ¡loggerµÄÖµ*/
 	config.logger = optstring("logger", NULL);
 
 	lua_close(L);
 
-	/*¿ªÊ¼ÔËĞĞskynet*/  
+        /*è¿è½¬keynet*/
 	skynet_start(&config);
-
-	/*ÇåÀí¹¤×÷*/
+        
+        /*é€€å‡ºskynet*/
 	skynet_globalexit();
 
 	return 0;

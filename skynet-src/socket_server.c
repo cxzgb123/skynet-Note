@@ -289,7 +289,7 @@ socket_server_create() {
 		return NULL;
 	}
 
-      /*创建套接字全局管理结构*/
+       /*创建套接字全局管理结构*/
 	struct socket_server *ss = MALLOC(sizeof(*ss));
 	/*记录所属的管理结构*/
 	ss->event_fd = efd;
