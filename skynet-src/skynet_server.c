@@ -48,9 +48,9 @@ struct skynet_context {
 	struct message_queue *queue;    /*该模块的工作消息队列*/
 	FILE * logfile;                 /*该模块的日志文件*/
 	char result[32];
-	uint32_t handle;                  
-	int session_id;
-	int ref;
+	uint32_t handle;                /*该模块的ID*/  
+	int session_id;         
+	int ref;                        /*该模块的引用*/
 	bool init;
 	bool endless;
 
@@ -150,11 +150,11 @@ skynet_context_new(const char * name, const char *param) {
       /*ctx 作为上层的模块管理结构*/
 	ctx->mod = mod;				/*模块的下层的管理结构*/
 	ctx->instance = inst;			/*下层模块初始化时获取到的结构*/
-	ctx->ref = 2;					/*设置模块的引用为2*/
+	ctx->ref = 2;			        /*设置模块的引用为2*/
 	ctx->cb = NULL;				
 	ctx->cb_ud = NULL;
 	ctx->session_id = 0;
-	ctx->logfile = NULL;
+	ctx->logfile = NULL;                    /*指向日志文件的*/
 
 	ctx->init = false;
 	ctx->endless = false;
