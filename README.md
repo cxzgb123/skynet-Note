@@ -1,3 +1,6 @@
+#Note for skynet
+阅读skynet并做相关标注
+
 ## Build
 
 For linux, install autoconf first for jemalloc
