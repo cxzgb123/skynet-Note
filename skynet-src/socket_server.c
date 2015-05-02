@@ -35,6 +35,7 @@
 #define PRIORITY_HIGH 0
 #define PRIORITY_LOW 1
 
+/*hash function*/
 #define HASH_ID(id) (((unsigned)id) % MAX_SOCKET)
 
 #define PROTOCOL_TCP 0
@@ -45,9 +46,14 @@
 
 #define MAX_UDP_PACKAGE 65535
 
+/**
+ * @brief buffer wait to write
+ *
+ *
+ */
 struct write_buffer {
-	struct write_buffer * next;
-	void *buffer;
+	struct write_buffer * next; /*link all buffer as a list*/
+	void *buffer;               /*store the data in the buffer*/
 	char *ptr;
 	int sz;
 	bool userobject;
@@ -57,19 +63,29 @@ struct write_buffer {
 #define SIZEOF_TCPBUFFER (offsetof(struct write_buffer, udp_address[0]))
 #define SIZEOF_UDPBUFFER (sizeof(struct write_buffer))
 
+/**
+ * @brief data wait to write linked together as a list
+ *
+ */
 struct wb_list {
-	struct write_buffer * head;
-	struct write_buffer * tail;
+	struct write_buffer * head; /*head of the write list*/
+	struct write_buffer * tail; /*tail of the write list*/
 };
 
+
+/**
+ * @brief manager of the socket
+ *
+ *
+ */
 struct socket {
 	uintptr_t opaque;
 	struct wb_list high;
 	struct wb_list low;
 	int64_t wb_size;
 	int fd;
-	int id;
-	uint16_t protocol;
+	int id;              
+	uint16_t protocol;  /*link protocol*/
 	uint16_t type;
 	union {
 		int size;
@@ -77,20 +93,24 @@ struct socket {
 	} p;
 };
 
+/**
+ * @brief manager of all socket
+ *
+ */
 struct socket_server {
-	int recvctrl_fd;
-	int sendctrl_fd;
-	int checkctrl;
-	poll_fd event_fd;
+	int recvctrl_fd;    /*read fd of pipe*/
+	int sendctrl_fd;    /*send fd of pipe*/
+	int checkctrl;      
+	poll_fd event_fd;   /*epoll handle*/
 	int alloc_id;
 	int event_n;
 	int event_index;
 	struct socket_object_interface soi;
 	struct event ev[MAX_EVENT];
-	struct socket slot[MAX_SOCKET];
+	struct socket slot[MAX_SOCKET]; 
 	char buffer[MAX_INFO];
 	uint8_t udpbuffer[MAX_UDP_PACKAGE];
-	fd_set rfds;
+	fd_set rfds;        /*fd group*/
 };
 
 struct request_open {
@@ -262,24 +282,28 @@ clear_wb_list(struct wb_list *list) {
 	list->tail = NULL;
 }
 
+
+/**
+ * @brief create server manager for skynet 
+ * @return handle for server in skynet
+ */
 struct socket_server * 
 socket_server_create() {
 	int i;
 	int fd[2];
-	/*申请epoll管理结构*/
+	/*handle for epoll*/
 	poll_fd efd = sp_create();
-	/*检查是否创建失败*/
 	if (sp_invalid(efd)) {
 		fprintf(stderr, "socket-server: create event pool failed.\n");
 		return NULL;
 	}
-	/*创建无名管道*/
+	/*create pipe*/
 	if (pipe(fd)) {
 		sp_release(efd);
 		fprintf(stderr, "socket-server: create socket pair failed.\n");
 		return NULL;
 	}
-	/*监听无名管道读端*/
+	/*listen read of pipe*/
 	if (sp_add(efd, fd[0], NULL)) {
 		// add recvctrl_fd to event poll
 		fprintf(stderr, "socket-server: can't add server fd to event pool.\n");
@@ -289,17 +313,20 @@ socket_server_create() {
 		return NULL;
 	}
 
-       /*创建套接字全局管理结构*/
+       /*alloc socket manager*/
 	struct socket_server *ss = MALLOC(sizeof(*ss));
-	/*记录所属的管理结构*/
+	/*store the epoll handle in manager*/
 	ss->event_fd = efd;
-	/*记录管道读端文件描述符*/
+
+	/*here!! You see pipe work as the ctrl way*/
+	/*store the */
+
+        /*store the fd of pipe in socket manager*/
 	ss->recvctrl_fd = fd[0];
-	/*记录管道写端文件描述符*/
 	ss->sendctrl_fd = fd[1];
 	ss->checkctrl = 1;
 
-	/*遍历所有待使用的套接字管理槽并初始化*/
+	/*init all socket handle*/
 	for (i=0;i<MAX_SOCKET;i++) {
 		struct socket *s = &ss->slot[i];
 		s->type = SOCKET_TYPE_INVALID;
@@ -1247,11 +1274,20 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 	}
 }
 
+/**
+ * @brief send a ctrl msg to the module
+ * @param[in] msg store
+ * @param[in] type msg type
+ * @param[in] msg tot len
+ *
+ *
+ */
 static void
 send_request(struct socket_server *ss, struct request_package *request, char type, int len) {
 	request->header[6] = (uint8_t)type;
 	request->header[7] = (uint8_t)len;
 	for (;;) {
+	        /*just send two bytes*/
 		int n = write(ss->sendctrl_fd, &request->header[6], len+2);
 		if (n<0) {
 			if (errno != EINTR) {
@@ -1325,6 +1361,11 @@ socket_server_send_lowpriority(struct socket_server *ss, int id, const void * bu
 	send_request(ss, &request, 'P', sizeof(request.u.send));
 }
 
+/**
+ * @brief send socket manager exit msg by ctrl pipe
+ * @param[in] ss socket_server manager
+ * return 
+ */
 void
 socket_server_exit(struct socket_server *ss) {
 	struct request_package request;

@@ -4,11 +4,16 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+/**
+ * @brief format for skynet_message
+ * 
+ *
+ */
 struct skynet_message {
-	uint32_t source;
-	int session;
-	void * data;
-	size_t sz;
+	uint32_t source;    /*msg from */
+	int session;        /*session id, (src ip, dst ip , src port, dst port)*/
+	void * data;        /*data send*/
+	size_t sz;          /*size, high 8 bit:node id, low 24bit: data size*/
 };
 
 struct message_queue;

@@ -36,21 +36,20 @@
 #endif
 
 /**
- *  @brief 每个模块对应一个消息队列
- *         该模块运转时被一个真线程调度
+ *  @brief manager for module
  *
  */
 struct skynet_context {
-	void * instance;                 /*该模块初始化时产生的结构*/
-	struct skynet_module * mod;      /*该模块的处理消息的函数以及模块名*/
+	void * instance;                 /*hold the structure init by module*/
+	struct skynet_module * mod;      /*handle of the module*/
 	void * cb_ud;
 	skynet_cb cb;
-	struct message_queue *queue;    /*该模块的工作消息队列*/
-	FILE * logfile;                 /*该模块的日志文件*/
+	struct message_queue *queue;    /*message queue for this module*/
+	FILE * logfile;                 /*logfile*/
 	char result[32];
-	uint32_t handle;                /*该模块的ID*/  
+	uint32_t handle;                /*module id for this queue*/  
 	int session_id;         
-	int ref;                        /*该模块的引用*/
+	int ref;                        /*ref for this module*/
 	bool init;
 	bool endless;
 
@@ -61,7 +60,7 @@ struct skynet_node {
 	int total;
 	int init;
 	uint32_t monitor_exit;
-	pthread_key_t handle_key;       /*用于线程中的函数共享数据*/   
+	pthread_key_t handle_key;       /*shared data in the thread*/   
 };
 
 static struct skynet_node G_NODE;
@@ -72,7 +71,7 @@ skynet_context_total() {
 }
 
 /**
- * @brief 原子加
+ * @brief atom add
  */
 static void
 context_inc() {
@@ -80,7 +79,7 @@ context_inc() {
 }
 
 /**
- * @brief 原子减
+ * @brief atod dec
  *
  */
 static void
@@ -94,7 +93,6 @@ skynet_current_handle(void) {
 		void * handle = pthread_getspecific(G_NODE.handle_key);
 		return (uint32_t)(uintptr_t)handle;
 	} else {
-	      /*最大无符号整形作为错误标志*/
 		uintptr_t v = (uint32_t)(-THREAD_MAIN);
 		return v;
 	}
@@ -744,6 +742,7 @@ skynet_send(struct skynet_context * context, uint32_t source, uint32_t destinati
 	_filter_args(context, type, &session, (void **)&data, &sz);
 
 	if (source == 0) {
+	        /*mark source as the module id*/
 		source = context->handle;
 	}
 
@@ -803,17 +802,40 @@ skynet_sendname(struct skynet_context * context, uint32_t source, const char * a
 	return skynet_send(context, source, des, type, session, data, sz);
 }
 
+/**
+ * @brief get the id of the module manager
+ * @return the module's id
+ */
 uint32_t 
 skynet_context_handle(struct skynet_context *ctx) {
 	return ctx->handle;
 }
 
+/**
+ * @breif reigster the callback and module structure into module manager 
+ * @param[in] cotext module manager
+ * @param[in] ud sturucture for the module
+ * @param[in] cb callback for deal with message
+ * @ud and cb build by init _callback in the module
+ */
 void 
 skynet_callback(struct skynet_context * context, void *ud, skynet_cb cb) {
 	context->cb = cb;
 	context->cb_ud = ud;
 }
 
+
+/**
+ * @brief module send one msg
+ * @param[in] skynet_context ctx manager for module
+ * @param[in] msg msg want to sand
+ * @param[in] sz size of the msg
+ * @param[in] source source of the msg
+ * @param[in] type node id for the msg
+ * @param[in] session id of the msg
+ * @bbuild one msg and push it into module queue
+ *
+ */
 void
 skynet_context_send(struct skynet_context * ctx, void * msg, size_t sz, uint32_t source, int type, int session) {
 	struct skynet_message smsg;
@@ -825,10 +847,17 @@ skynet_context_send(struct skynet_context * ctx, void * msg, size_t sz, uint32_t
 	skynet_mq_push(ctx->queue, &smsg);
 }
 
+/**
+ * @brief init the node manager for skynet
+ *
+ */
 void 
 skynet_globalinit(void) {
+        /*set tot module's record*/
 	G_NODE.total = 0;
+	
 	G_NODE.monitor_exit = 0;
+
 	G_NODE.init = 1;
 	if (pthread_key_create(&G_NODE.handle_key, NULL)) {
 		fprintf(stderr, "pthread_key_create failed");
@@ -838,11 +867,18 @@ skynet_globalinit(void) {
 	skynet_initthread(THREAD_MAIN);
 }
 
+/***
+ * @brief delete share area for thread
+ */
 void 
 skynet_globalexit(void) {
 	pthread_key_delete(G_NODE.handle_key);
 }
 
+/** 
+ * @brief push -v into thread share area
+ *
+ */
 void
 skynet_initthread(int m) {
 	uintptr_t v = (uint32_t)(-m);

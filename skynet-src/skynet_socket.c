@@ -13,10 +13,16 @@
 
 static struct socket_server * SOCKET_SERVER = NULL;
 
+/**
+ * @brief init the socket manager
+ * return the handle of the socket manager
+ *
+ */
 void 
 skynet_socket_init() {
 	SOCKET_SERVER = socket_server_create();
 }
+
 
 void
 skynet_socket_exit() {
