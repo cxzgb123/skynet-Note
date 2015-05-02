@@ -87,6 +87,11 @@ context_dec() {
 	__sync_fetch_and_sub(&G_NODE.total,1);
 }
 
+/**
+ * @brief get id of this thread
+ * @@note main thread id before init finished
+ *
+ */
 uint32_t 
 skynet_current_handle(void) {
 	if (G_NODE.init) {
@@ -98,6 +103,10 @@ skynet_current_handle(void) {
 	}
 }
 
+/**
+ * @brief change id to hex val
+ *
+ */
 static void
 id_to_hex(char * str, uint32_t id) {
 	int i;
@@ -109,8 +118,12 @@ id_to_hex(char * str, uint32_t id) {
 	str[9] = '\0';
 }
 
+/**
+ * @brief hold the module id when drop message
+ *
+ */
 struct drop_t {
-	uint32_t handle;
+	uint32_t handle;    /*id of the module*/
 };
 
 static void
