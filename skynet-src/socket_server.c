@@ -83,7 +83,7 @@ struct socket {
 	struct wb_list high;
 	struct wb_list low;
 	int64_t wb_size;
-	int fd;
+	int fd;             /*socket fd*/
 	int id;              
 	uint16_t protocol;  /*link protocol*/
 	uint16_t type;
