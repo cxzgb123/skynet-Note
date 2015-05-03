@@ -84,7 +84,7 @@ struct socket {
 	struct wb_list low;
 	int64_t wb_size;
 	int fd;             /*socket fd*/
-	int id;              
+	int id;             /*id alloc for this socket*/ 
 	uint16_t protocol;  /*link protocol*/
 	uint16_t type;
 	union {
@@ -102,7 +102,7 @@ struct socket_server {
 	int sendctrl_fd;    /*send fd of pipe*/
 	int checkctrl;      
 	poll_fd event_fd;   /*epoll handle*/
-	int alloc_id;
+	int alloc_id;       /*curr id alloc for socket, socket_id = HASH_ID(alloc_id < 0 ? alloc + 0x7fffffff, alloc_id)*/
 	int event_n;
 	int event_index;
 	struct socket_object_interface soi;
@@ -253,15 +253,25 @@ socket_keepalive(int fd) {
 	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive , sizeof(keepalive));  
 }
 
+
+/**
+ * @brief get id by socket_server
+ * @return id for the socket
+ *
+ */
 static int
 reserve_id(struct socket_server *ss) {
 	int i;
+	/*lookup all socket*/
 	for (i=0;i<MAX_SOCKET;i++) {
+	        /*here is will alloc as 1 ,2, 3, INT_MAX, INT_MAX - 1 ... 3 2 1*/
 		int id = __sync_add_and_fetch(&(ss->alloc_id), 1);
 		if (id < 0) {
 			id = __sync_and_and_fetch(&(ss->alloc_id), 0x7fffffff);
 		}
+		/*lookup slot by hash*/
 		struct socket *s = &ss->slot[HASH_ID(id)];
+		/*尝试将空槽占用*/
 		if (s->type == SOCKET_TYPE_INVALID) {
 			if (__sync_bool_compare_and_swap(&s->type, SOCKET_TYPE_INVALID, SOCKET_TYPE_RESERVE)) {
 				s->id = id;
@@ -1300,6 +1310,12 @@ send_request(struct socket_server *ss, struct request_package *request, char typ
 	}
 }
 
+/**
+ * 
+ *
+ *
+ *
+ */
 static int
 open_request(struct socket_server *ss, struct request_package *req, uintptr_t opaque, const char *addr, int port) {
 	int len = strlen(addr);
@@ -1307,6 +1323,7 @@ open_request(struct socket_server *ss, struct request_package *req, uintptr_t op
 		fprintf(stderr, "socket-server : Invalid addr %s.\n",addr);
 		return -1;
 	}
+	/*alloc the socket id*/
 	int id = reserve_id(ss);
 	if (id < 0)
 		return -1;
@@ -1602,11 +1619,20 @@ socket_server_udp_connect(struct socket_server *ss, int id, const char * addr, i
 	return 0;
 }
 
+/**
+ * @brief get the address and size of the socket_message address
+ * @param[in] ss manager all socket 
+ * @param[in] msg socket msg
+ * @param[out] addrsz get the size of the udp address
+ * @return socket_udp_address
+ */
 const struct socket_udp_address *
 socket_server_udp_address(struct socket_server *ss, struct socket_message *msg, int *addrsz) {
-	uint8_t * address = (uint8_t *)(msg->data + msg->ud);
+        /*address is in the end of the msg data*/	
+        uint8_t * address = (uint8_t *)(msg->data + msg->ud);
 	int type = address[0];
 	switch(type) {
+	        /*set address size by type of udp address*/
 	case PROTOCOL_UDP:
 		*addrsz = 1+2+4;
 		break;

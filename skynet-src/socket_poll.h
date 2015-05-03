@@ -5,6 +5,11 @@
 
 typedef int poll_fd;
 
+/**
+ *
+ *
+ *
+ */
 struct event {
 	void * s;
 	bool read;

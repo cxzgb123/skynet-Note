@@ -11,41 +11,48 @@
 #define DEFAULT_SLOT_SIZE 4
 #define MAX_SLOT_SIZE 0x40000000
 
+/**
+ * @brief structure of modules registered 
+ *
+ */
 struct handle_name {
-	char * name;
-	uint32_t handle;
+	char * name;            /*name of the module*/
+	uint32_t handle;        /*id of the module*/
 };
-
-struct handle_storage {
-	struct rwlock lock;
-
-	uint32_t harbor;
-	uint32_t handle_index;
-	int slot_size;
-	struct skynet_context ** slot;
-	
-	int name_cap;
-	int name_count;
-	struct handle_name *name;
-};
-
-static struct handle_storage *H = NULL;
 
 /**
- * @brief 将该模块的管理结构注册到hash表中
- * @param[in] ctx 模块的管理结构
- * @return 模块ID
+ * @brief used store all modules in it
+ *
+ *
+ */
+struct handle_storage {
+	struct rwlock lock;             /*read and write lock*/
+
+	uint32_t harbor;                /*harbor id*/
+	uint32_t handle_index;          
+	int slot_size;                  /*slot tot size*/
+	struct skynet_context ** slot;  /*slots used to store handle*/ 
+	
+	int name_cap;                   /*space used to store name of module*/
+	int name_count;                 /*module name stored in table*/
+	struct handle_name *name;       /*store the handle name*/
+};
+
+static struct handle_storage *H = NULL; /*one handle_storage only*/
+
+/**
+ * @brief register the module into the storage
+ * @param[in] ctx manager of the module
+ * @return module id ( 8bit harbit id + 24bit slot index)
  */
 uint32_t
 skynet_handle_register(struct skynet_context *ctx) {
-	/*模块全局管理结构*/
 	struct handle_storage *s = H;
-
 	rwlock_wlock(&s->lock);
 	
 	for (;;) {
 		int i;
-		/*遍历所有空位，寻找位置放该管理结构*/
+		/*lookup the empty slot*/
 		for (i=0;i<s->slot_size;i++) {
 			uint32_t handle = (i+s->handle_index) & HANDLE_MASK;
 			int hash = handle & (s->slot_size-1);
@@ -59,7 +66,7 @@ skynet_handle_register(struct skynet_context *ctx) {
 				return handle;
 			}
 		}
-		/*倍增存放表*/
+		/*double it's size*/
 		assert((s->slot_size*2 - 1) <= HANDLE_MASK);
 		struct skynet_context ** new_slot = skynet_malloc(s->slot_size * 2 * sizeof(struct skynet_context *));
 		memset(new_slot, 0, s->slot_size * 2 * sizeof(struct skynet_context *));
@@ -74,6 +81,12 @@ skynet_handle_register(struct skynet_context *ctx) {
 	}
 }
 
+/**
+ * @brief unregister the module 
+ * @param[in] handle index of the module
+ * @reutrn delete one module ? 1 : 0
+ *
+ */
 int
 skynet_handle_retire(uint32_t handle) {
 	int ret = 0;
@@ -113,6 +126,11 @@ skynet_handle_retire(uint32_t handle) {
 	return ret;
 }
 
+/**
+ * @brief unregistered all modules
+ *
+ *
+ */
 void 
 skynet_handle_retireall() {
 	struct handle_storage *s = H;
@@ -178,7 +196,6 @@ skynet_handle_findname(const char * name) {
 	int begin = 0;
 	int end = s->name_count - 1;
 	while (begin<=end) {
-		/*TODO 改成 (end - begin)/2 + begin 更好*/
 		int mid = (begin+end)/2;
 		struct handle_name *n = &s->name[mid];
 		int c = strcmp(n->name, name);
@@ -198,6 +215,14 @@ skynet_handle_findname(const char * name) {
 	return handle;
 }
 
+/**
+ * @brief insert one name before another module
+ * @param[in] s storage of the module
+ * @param[in] name new module's name
+ * @param[in] handle index of the module
+ * @param[in] before the other module's index in name storage
+ *
+ */
 static void
 _insert_name_before(struct handle_storage *s, char *name, uint32_t handle, int before) {
 	if (s->name_count >= s->name_cap) {
@@ -224,6 +249,12 @@ _insert_name_before(struct handle_storage *s, char *name, uint32_t handle, int b
 	s->name_count ++;
 }
 
+/**
+ * @brief insert one name into the name table
+ * @param[in] s storage for module
+ * @param[in] name new module's name
+ * @paran[in] handle new module's id
+ */
 static const char *
 _insert_name(struct handle_storage *s, const char * name, uint32_t handle) {
 	int begin = 0;
@@ -248,6 +279,13 @@ _insert_name(struct handle_storage *s, const char * name, uint32_t handle) {
 	return result;
 }
 
+/**
+ * @brief insert one module's name into the storage's name table
+ * @param[in] id of the module
+ * @param[in] name name wait to insert
+ * @return module's name
+ *
+ */
 const char * 
 skynet_handle_namehandle(uint32_t handle, const char *name) {
 	rwlock_wlock(&H->lock);

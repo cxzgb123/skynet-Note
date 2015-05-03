@@ -141,6 +141,13 @@ skynet_socket_listen(struct skynet_context *ctx, const char *host, int port, int
 	return socket_server_listen(SOCKET_SERVER, source, host, port, backlog);
 }
 
+/**
+ * @brief try to connect others by tcp
+ * @param[in] ctx handle for the module
+ * @param[in] host ip wait to connect
+ * @param[in] port port wait to connect
+ *
+ */
 int 
 skynet_socket_connect(struct skynet_context *ctx, const char *host, int port) {
 	uint32_t source = skynet_context_handle(ctx);
@@ -187,6 +194,11 @@ skynet_socket_udp_send(struct skynet_context *ctx, int id, const char * address,
 	return check_wsz(ctx, id, (void *)buffer, wsz);
 }
 
+/**
+ * @brief get the address string of the udp address
+ * @reutnr string of the udp address
+ *
+ */
 const char *
 skynet_socket_udp_address(struct skynet_socket_message *msg, int *addrsz) {
 	if (msg->type != SKYNET_SOCKET_TYPE_UDP) {
