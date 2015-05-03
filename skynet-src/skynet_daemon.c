@@ -8,6 +8,12 @@
 
 #include "skynet_daemon.h"
 
+/**
+ * @brief get pid by file or getpid the kill the process with the pid
+ * @param[in] pidfile path of the pidfile
+ *
+ *
+ */
 static int
 check_pid(const char *pidfile) {
 	int pid = 0;
@@ -27,6 +33,11 @@ check_pid(const char *pidfile) {
 	return pid;
 }
 
+/**
+ * @brief dump the pid into pidfile
+ * @param[in] pidfile file store the pid
+ *
+ */
 static int 
 write_pid(const char *pidfile) {
 	FILE *f;
@@ -64,8 +75,16 @@ write_pid(const char *pidfile) {
 	return pid;
 }
 
+
+/**
+ * @brief kill the old process and run the new process as daemon
+ *
+ *
+ *
+ */
 int
 daemon_init(const char *pidfile) {
+        /*get pid and kill the old process*/
 	int pid = check_pid(pidfile);
 
 	if (pid) {
@@ -76,12 +95,13 @@ daemon_init(const char *pidfile) {
 #ifdef __APPLE__
 	fprintf(stderr, "'daemon' is deprecated: first deprecated in OS X 10.5 , use launchd instead.\n");
 #else
+        /*run in background*/
 	if (daemon(1,0)) {
 		fprintf(stderr, "Can't daemonize.\n");
 		return 1;
 	}
 #endif
-
+        /*dump the new pid into pidfile*/
 	pid = write_pid(pidfile);
 	if (pid == 0) {
 		return 1;
@@ -90,6 +110,11 @@ daemon_init(const char *pidfile) {
 	return 0;
 }
 
+/**
+ * @brief dec the ref of the pidfile
+ *
+ *
+ */
 int 
 daemon_exit(const char *pidfile) {
 	return unlink(pidfile);
