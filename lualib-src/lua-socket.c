@@ -36,8 +36,8 @@ struct buffer_node {
  *
  */
 struct socket_buffer {
-	int size;
-	int offset;
+	int size;                   /*nums of  elemets it the buffer_note list*/
+	int offset;                 /*unpoped buffer of the first buffer_node*/
 	struct buffer_node *head;   /*head of the list*/
 	struct buffer_node *tail;   /*tail of the list*/
 };
@@ -180,17 +180,29 @@ lpushbuffer(lua_State *L) {
 	return 1;
 }
 
+
+/**
+ * @brief move one buffer from the buffer_node list into virtual stack
+ *        and link this buffer into the buffer_note list in the virtual stack
+ * @param[in] socket_buffer
+ * @TODO 
+ *
+ */
 static void
 return_free_node(lua_State *L, int pool, struct socket_buffer *sb) {
+        /*move one buffer_node into the virtual stack*/
 	struct buffer_node *free_node = sb->head;
 	sb->offset = 0;
 	sb->head = free_node->next;
 	if (sb->head == NULL) {
 		sb->tail = NULL;
 	}
+
+	/*link the buffer_node into the list in the virtial stack*/
 	lua_rawgeti(L,pool,1);
 	free_node->next = lua_touserdata(L,-1);
 	lua_pop(L,1);
+	/*free space int the lua*/
 	skynet_free(free_node->msg);
 	free_node->msg = NULL;
 
@@ -199,14 +211,27 @@ return_free_node(lua_State *L, int pool, struct socket_buffer *sb) {
 	lua_rawseti(L, pool, 1);
 }
 
+/***
+ * @brief try pop msg with the size sz into stack
+ * @param[in] L lua handle
+ * @param[in] sb socket_buffer
+ * @param[in] sz size of msg want to pop
+ * @
+ *
+ *
+ */
 static void
 pop_lstring(lua_State *L, struct socket_buffer *sb, int sz, int skip) {
 	struct buffer_node * current = sb->head;
+
+	/*sz smaller than msg in first buffer_node*/
 	if (sz < current->sz - sb->offset) {
+	        /*pop a piece*/
 		lua_pushlstring(L, current->msg + sb->offset, sz-skip);
 		sb->offset+=sz;
 		return;
 	}
+
 	if (sz == current->sz - sb->offset) {
 		lua_pushlstring(L, current->msg + sb->offset, sz-skip);
 		return_free_node(L,2,sb);
