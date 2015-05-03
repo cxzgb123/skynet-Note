@@ -19,22 +19,39 @@
 #define LARGE_PAGE_NODE 12
 #define BUFFER_LIMIT (256 * 1024)
 
+/**
+ * @brief every data block store in this
+ * @note the block will link together as a list
+ *
+ */
 struct buffer_node {
-	char * msg;
-	int sz;
-	struct buffer_node *next;
+	char * msg;                 /*start of the buffer*/
+	int sz;                     /*size of the buffer*/
+	struct buffer_node *next;   /*used to link all buffer together*/
 };
 
+/**
+ * @brief buffer will store all data as a list, link every block toghther
+ *
+ *
+ */
 struct socket_buffer {
 	int size;
 	int offset;
-	struct buffer_node *head;
-	struct buffer_node *tail;
+	struct buffer_node *head;   /*head of the list*/
+	struct buffer_node *tail;   /*tail of the list*/
 };
 
+/**
+ * @brief free msg in buffer_node array
+ *
+ */
 static int
 lfreepool(lua_State *L) {
+        /*get buffer node array  ptr*/
 	struct buffer_node * pool = lua_touserdata(L, 1);
+
+        /*get nums of buffer_node*/
 	int sz = lua_rawlen(L,1) / sizeof(*pool);
 	int i;
 	for (i=0;i<sz;i++) {
@@ -47,6 +64,12 @@ lfreepool(lua_State *L) {
 	return 0;
 }
 
+
+/**
+ * @brief alloc array of buffer_node 
+ * @note reigster metable with lfreepool as _gc to free msg
+ *
+ */
 static int
 lnewpool(lua_State *L, int sz) {
 	struct buffer_node * pool = lua_newuserdata(L, sizeof(struct buffer_node) * sz);
@@ -65,8 +88,14 @@ lnewpool(lua_State *L, int sz) {
 	return 1;
 }
 
+/**
+ * @brief create and push one socket_buf manager into stack
+ *
+ *
+ */
 static int
 lnewbuffer(lua_State *L) {
+        /*alloc the new userdata*/
 	struct socket_buffer * sb = lua_newuserdata(L, sizeof(*sb));	
 	sb->size = 0;
 	sb->offset = 0;
@@ -95,6 +124,7 @@ lnewbuffer(lua_State *L) {
  */
 static int
 lpushbuffer(lua_State *L) {
+        /*get socket_buffer structure*/
 	struct socket_buffer *sb = lua_touserdata(L,1);
 	if (sb == NULL) {
 		return luaL_error(L, "need buffer object at param 1");
@@ -107,9 +137,12 @@ lpushbuffer(lua_State *L) {
 	luaL_checktype(L,pool_index,LUA_TTABLE);
 	int sz = luaL_checkinteger(L,4);
 	lua_rawgeti(L,pool_index,1);
+        
+        /*try to get free_node*/
 	struct buffer_node * free_node = lua_touserdata(L,-1);	// sb poolt msg size free_node
 	lua_pop(L,1);
 	if (free_node == NULL) {
+	/*try to init the buffer_node list, and free_node work as the head of the list*/
 		int tsz = lua_rawlen(L,pool_index);
 		if (tsz == 0)
 			tsz++;
@@ -119,6 +152,8 @@ lpushbuffer(lua_State *L) {
 		} else {
 			size <<= LARGE_PAGE_NODE-3;
 		}
+
+		/*alloc the buf_node list*/
 		lnewpool(L, size);	
 		free_node = lua_touserdata(L,-1);
 		lua_rawseti(L, pool_index, tsz+1);
@@ -128,7 +163,8 @@ lpushbuffer(lua_State *L) {
 	free_node->msg = msg;
 	free_node->sz = sz;
 	free_node->next = NULL;
-
+        
+        /*socket_buf as the master of the buf_node list*/
 	if (sb->head == NULL) {
 		assert(sb->tail == NULL);
 		sb->head = sb->tail = free_node;
@@ -136,6 +172,7 @@ lpushbuffer(lua_State *L) {
 		sb->tail->next = free_node;
 		sb->tail = free_node;
 	}
+	/*get the list element size*/
 	sb->size += sz;
 
 	lua_pushinteger(L, sb->size);
@@ -373,17 +410,23 @@ lstr2p(lua_State *L) {
 */
 static int
 lunpack(lua_State *L) {
+        /*pop out message*/
 	struct skynet_socket_message *message = lua_touserdata(L,1);
+        /*get size of the */
 	int size = luaL_checkinteger(L,2);
-
+	/*push type, id, ud into stack*/
 	lua_pushinteger(L, message->type);
 	lua_pushinteger(L, message->id);
 	lua_pushinteger(L, message->ud);
+	/*check if the buffer NULL*/
 	if (message->buffer == NULL) {
+	        /*if buffer is NULL, push the buffer into stack*/
 		lua_pushlstring(L, (char *)(message+1),size - sizeof(*message));
 	} else {
+	        /*if buffer is Not NUll, push the ptr of the buffer into stack*/
 		lua_pushlightuserdata(L, message->buffer);
 	}
+	/*if it is udp message, push the address of the dup msg into stack*/
 	if (message->type == SKYNET_SOCKET_TYPE_UDP) {
 		int addrsz = 0;
 		const char * addrstring = skynet_socket_udp_address(message, &addrsz);
@@ -619,8 +662,13 @@ ludp_address(lua_State *L) {
 	return 2;
 }
 
+/**
+ * @brief register the functions for lua
+ *
+ */
 int
 luaopen_socketdriver(lua_State *L) {
+        /*check the lua version*/
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "buffer", lnewbuffer },
@@ -636,6 +684,7 @@ luaopen_socketdriver(lua_State *L) {
 		{ "unpack", lunpack },
 		{ NULL, NULL },
 	};
+	/*register libs for lua*/
 	luaL_newlib(L,l);
 	luaL_Reg l2[] = {
 		{ "connect", lconnect },
@@ -652,12 +701,13 @@ luaopen_socketdriver(lua_State *L) {
 		{ "udp_address", ludp_address },
 		{ NULL, NULL },
 	};
+	/*put the ctx from lua in the top of the vritual stack*/
 	lua_getfield(L, LUA_REGISTRYINDEX, "skynet_context");
 	struct skynet_context *ctx = lua_touserdata(L,-1);
 	if (ctx == NULL) {
 		return luaL_error(L, "Init skynet context first");
 	}
-
+        /*register the funcs*/
 	luaL_setfuncs(L,l2,1);
 
 	return 1;
