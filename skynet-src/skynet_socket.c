@@ -72,13 +72,21 @@ forward_message(int type, bool padding, struct socket_message * result) {
 	}
 }
 
+
+/**
+ * @brief as door of this server, accept client, 
+ *  get client msg forward it to module, wirte msg to client
+ * @return close socket manager ? -1 : 1
+ */
 int 
 skynet_socket_poll() {
 	struct socket_server *ss = SOCKET_SERVER;
 	assert(ss);
 	struct socket_message result;
 	int more = 1;
+	/*wait evnet occured*/
 	int type = socket_server_poll(ss, &result, &more);
+	/*process message get from poll*/
 	switch (type) {
 	case SOCKET_EXIT:
 		return 0;
@@ -104,6 +112,7 @@ skynet_socket_poll() {
 		skynet_error(NULL, "Unknown socket message type %d.",type);
 		return -1;
 	}
+	/*exit when more is ture*/
 	if (more) {
 		return -1;
 	}

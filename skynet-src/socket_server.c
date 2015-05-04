@@ -1150,32 +1150,48 @@ report_connect(struct socket_server *ss, struct socket *s, struct socket_message
 }
 
 // return 0 when failed
+/**
+ * @brief accpect one connect from user and build the socket msg 
+ * @param[in] ss master of all socket 
+ * @param[in] s  socket accept connect
+ * @param[out] result msg wait to build
+ * @return get new clinet fail ? 0 : 1
+ *
+ */
 static int
 report_accept(struct socket_server *ss, struct socket *s, struct socket_message *result) {
 	union sockaddr_all u;
+	/*accpet usr and try to get fd*/
 	socklen_t len = sizeof(u);
 	int client_fd = accept(s->fd, &u.s, &len);
 	if (client_fd < 0) {
 		return 0;
 	}
+	/*get id for this client*/
 	int id = reserve_id(ss);
 	if (id < 0) {
 		close(client_fd);
 		return 0;
 	}
+	/*install  keepalive timer*/
 	socket_keepalive(client_fd);
+	/*set the clinet as nonblock*/
 	sp_nonblocking(client_fd);
+	/*alloc new socket manager and register read fd*/
 	struct socket *ns = new_fd(ss, id, client_fd, PROTOCOL_TCP, s->opaque, false);
 	if (ns == NULL) {
 		close(client_fd);
 		return 0;
 	}
+	/*change type to opaque*/
 	ns->type = SOCKET_TYPE_PACCEPT;
+	/*store the attributes into the result*/
 	result->opaque = s->opaque;
-	result->id = s->id;
-	result->ud = id;
+	result->id = s->id;  /*listen socket id*/
+	result->ud = id;     /*client socket id*/
 	result->data = NULL;
-
+        
+        /*store the address in string*/
 	void * sin_addr = (u.s.sa_family == AF_INET) ? (void*)&u.v4.sin_addr : (void *)&u.v6.sin6_addr;
 	int sin_port = ntohs((u.s.sa_family == AF_INET) ? u.v4.sin_port : u.v6.sin6_port);
 	char tmp[INET6_ADDRSTRLEN];
@@ -1187,6 +1203,13 @@ report_accept(struct socket_server *ss, struct socket *s, struct socket_message 
 	return 1;
 }
 
+/**
+ * @brief clear evnet closed
+ * @param[in] ss socket manager
+ * @param[in] result socket wait to delete
+ * @param[in] type action type
+ *
+ */
 static inline void 
 clear_closed_event(struct socket_server *ss, struct socket_message * result, int type) {
 	if (type == SOCKET_CLOSE || type == SOCKET_ERROR) {
@@ -1197,6 +1220,7 @@ clear_closed_event(struct socket_server *ss, struct socket_message * result, int
 			struct socket *s = e->s;
 			if (s) {
 				if (s->type == SOCKET_TYPE_INVALID && s->id == id) {
+				        /*clean the socket*/
 					e->s = NULL;
 				}
 			}
@@ -1205,22 +1229,36 @@ clear_closed_event(struct socket_server *ss, struct socket_message * result, int
 }
 
 // return type
+/**
+ * @brief wait event by epoll
+ * @param[in] ss manager of all sockets
+ * @param[out] result get socket message
+ * @param[out] more set as 0  when read or write evnet occured
+ * @return type
+ *
+ */
 int 
 socket_server_poll(struct socket_server *ss, struct socket_message * result, int * more) {
 	for (;;) {
+	        /*we need get info from pipe if check ctrl*/
 		if (ss->checkctrl) {
+		        /*try to get msg from pipe*/
 			if (has_cmd(ss)) {
+                                /*get request msg from the pipe*/
 				int type = ctrl_cmd(ss, result);
 				if (type != -1) {
+				        /*fail, so we clear the event*/
 					clear_closed_event(ss, result, type);
 					return type;
 				} else
 					continue;
 			} else {
+			        
 				ss->checkctrl = 0;
 			}
 		}
 		if (ss->event_index == ss->event_n) {
+		        /*wait event occured and record what occured*/
 			ss->event_n = sp_wait(ss->event_fd, ss->ev, MAX_EVENT);
 			ss->checkctrl = 1;
 			if (more) {
@@ -1232,6 +1270,7 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 				return -1;
 			}
 		}
+		/*get one event*/
 		struct event *e = &ss->ev[ss->event_index++];
 		struct socket *s = e->s;
 		if (s == NULL) {
@@ -1240,8 +1279,10 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 		}
 		switch (s->type) {
 		case SOCKET_TYPE_CONNECTING:
+		        /*connect to others success*/
 			return report_connect(ss, s, result);
 		case SOCKET_TYPE_LISTEN:
+		        /*get new connect from user success*/
 			if (report_accept(ss, s, result)) {
 				return SOCKET_ACCEPT;
 			} 
@@ -1250,6 +1291,7 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 			fprintf(stderr, "socket-server: invalid socket\n");
 			break;
 		default:
+		        /*get usr msg from socket*/
 			if (e->read) {
 				int type;
 				if (s->protocol == PROTOCOL_TCP) {
@@ -1272,6 +1314,7 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 				clear_closed_event(ss, result, type);
 				return type;
 			}
+			/*write data into others when write event cccured*/
 			if (e->write) {
 				int type = send_buffer(ss, s, result);
 				if (type == -1)
@@ -1580,6 +1623,8 @@ socket_server_udp_send(struct socket_server *ss, int id, const struct socket_udp
 	send_request(ss, &request, 'A', sizeof(request.u.send_udp.send)+addrsz);
 	return s->wb_size;
 }
+
+//
 
 int
 socket_server_udp_connect(struct socket_server *ss, int id, const char * addr, int port) {

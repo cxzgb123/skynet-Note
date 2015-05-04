@@ -54,6 +54,11 @@ wakeup(struct monitor *m, int busy) {
 	}
 }
 
+/**
+ * @brief socket 
+ * @param[in] it run as a module in one thread
+ * @param[in] p monitor of this module
+ */
 static void *
 _socket(void *p) {
 	struct monitor * m = p;
@@ -66,6 +71,8 @@ _socket(void *p) {
 			CHECK_ABORT
 			continue;
 		}
+		/*wakeup one when sleep thread bigger than montior*/
+		/*so, thread can process the msg from socket to other module*/
 		wakeup(m,0);
 	}
 	return NULL;
