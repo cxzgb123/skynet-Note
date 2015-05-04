@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/*type of the msg*/
 #define PTYPE_TEXT 0
 #define PTYPE_RESPONSE 1
 #define PTYPE_MULTICAST 2
