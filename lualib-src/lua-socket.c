@@ -183,9 +183,8 @@ lpushbuffer(lua_State *L) {
 
 /**
  * @brief move one buffer from the buffer_node list into virtual stack
- *        and link this buffer into the buffer_note list in the virtual stack
+ *        and link this buffer into the buffer_note list as an element of the buffer_node array
  * @param[in] socket_buffer
- * @TODO 
  *
  */
 static void
@@ -198,14 +197,15 @@ return_free_node(lua_State *L, int pool, struct socket_buffer *sb) {
 		sb->tail = NULL;
 	}
 
-	/*link the buffer_node into the list in the virtial stack*/
+	/*put the first one of the buffer_node list into the virtial stack*/
 	lua_rawgeti(L,pool,1);
+	/*the free_node work as the head of the buffer_node*/
 	free_node->next = lua_touserdata(L,-1);
 	lua_pop(L,1);
 	/*free space int the lua*/
 	skynet_free(free_node->msg);
 	free_node->msg = NULL;
-
+        /*put the free_node in the array of buffer_node*/
 	free_node->sz = 0;
 	lua_pushlightuserdata(L, free_node);
 	lua_rawseti(L, pool, 1);
@@ -216,7 +216,6 @@ return_free_node(lua_State *L, int pool, struct socket_buffer *sb) {
  * @param[in] L lua handle
  * @param[in] sb socket_buffer
  * @param[in] sz size of msg want to pop
- * @
  *
  *
  */
@@ -231,7 +230,7 @@ pop_lstring(lua_State *L, struct socket_buffer *sb, int sz, int skip) {
 		sb->offset+=sz;
 		return;
 	}
-
+        /*sz is the same with the first buffer_node size*/
 	if (sz == current->sz - sb->offset) {
 		lua_pushlstring(L, current->msg + sb->offset, sz-skip);
 		return_free_node(L,2,sb);
@@ -241,9 +240,12 @@ pop_lstring(lua_State *L, struct socket_buffer *sb, int sz, int skip) {
 	luaL_Buffer b;
 	luaL_buffinit(L, &b);
 	for (;;) {
+	        /*current buffer_node useable size*/
 		int bytes = current->sz - sb->offset;
+		/*this buffer_node with more msg than needed*/
 		if (bytes >= sz) {
 			if (sz > skip) {
+			        /*pop msg into the stack*/
 				luaL_addlstring(&b, current->msg + sb->offset, sz - skip);
 			} 
 			sb->offset += sz;
@@ -254,29 +256,39 @@ pop_lstring(lua_State *L, struct socket_buffer *sb, int sz, int skip) {
 		}
 		luaL_addlstring(&b, current->msg + sb->offset, (sz - skip < bytes) ? sz - skip : bytes);
 		return_free_node(L,2,sb);
+
+		/*update need msg size*/
 		sz-=bytes;
 		if (sz==0)
 			break;
+		/*get the next one*/
 		current = sb->head;
 		assert(current);
 	}
 	luaL_pushresult(&b);
 }
 
+/**
+ * @brief get string and build it's hash key, then push it into stack
+ *
+ *
+ */
 static int
 lheader(lua_State *L) {
 	size_t len;
+	/*get string*/
 	const uint8_t * s = (const uint8_t *)luaL_checklstring(L, 1, &len);
 	if (len > 4 || len < 1) {
 		return luaL_error(L, "Invalid read %s", s);
 	}
 	int i;
 	size_t sz = 0;
+	/*get hash key*/
 	for (i=0;i<(int)len;i++) {
 		sz <<= 8;
 		sz |= s[i];
 	}
-
+        /*put key into stack*/
 	lua_pushinteger(L, (lua_Integer)sz);
 
 	return 1;
@@ -324,6 +336,11 @@ lclearbuffer(lua_State *L) {
 	return 0;
 }
 
+/**
+ * @brief dump the all socket_buffer as its buffer_node array into stack
+ *
+ *
+ */
 static int
 lreadall(lua_State *L) {
 	struct socket_buffer * sb = lua_touserdata(L, 1);
@@ -335,7 +352,9 @@ lreadall(lua_State *L) {
 	luaL_buffinit(L, &b);
 	while(sb->head) {
 		struct buffer_node *current = sb->head;
+		/*dump msg*/
 		luaL_addlstring(&b, current->msg + sb->offset, current->sz - sb->offset);
+		/*dump buffer_node*/
 		return_free_node(L,2,sb);
 	}
 	luaL_pushresult(&b);
