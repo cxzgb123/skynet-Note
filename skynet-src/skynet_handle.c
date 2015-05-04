@@ -156,9 +156,9 @@ skynet_handle_retireall() {
 }
 
 /**
-  * @brief 获取该模块对应的管理结构
-  * @param[in] handle 模块ID
-  * @note 注意这里对每个模块管理结构是单例模式
+  * @brief get the handle of module by handle
+  * @param[in] handle id of module
+  * @note
   */
 struct skynet_context * 
 skynet_handle_grab(uint32_t handle) {
@@ -171,18 +171,17 @@ skynet_handle_grab(uint32_t handle) {
 	struct skynet_context * ctx = s->slot[hash];
 	if (ctx && skynet_context_handle(ctx) == handle) {
 		result = ctx;
-		/*将管理结构引用加一*/
+		/*add ref of module */
 		skynet_context_grab(result);
 	}
 
 	rwlock_runlock(&s->lock);
-	/*返回管理结构*/
 	return result;
 }
 
 /**
- * @brief 根据模块名称二分查找模块ID
- * @param[in] name 模块名称
+ * @brief get module handle by binary search, name as a key
+ * @param[in] name name of the module
  * 
  */
 uint32_t 
