@@ -205,7 +205,7 @@ struct request_setopt {
  *
  */
 struct request_udp {
-	int id;
+	int id;                                 /*id of the socket*/
 	int fd;
 	int family;
 	uintptr_t opaque;
@@ -252,6 +252,11 @@ union sockaddr_all {
 	struct sockaddr_in6 v6;
 };
 
+/**
+ * @brief warp of obj wait to send
+ *
+ *
+ */
 struct send_object {
 	void * buffer;
 	int sz;
@@ -493,6 +498,12 @@ check_wb_list(struct wb_list *s) {
 	assert(s->tail == NULL);
 }
 
+/**
+ * @brief create a new socket
+ *
+ *
+ *
+ */
 static struct socket *
 new_fd(struct socket_server *ss, int id, int fd, int protocol, uintptr_t opaque, bool add) {
 	struct socket * s = &ss->slot[HASH_ID(id)];
@@ -650,8 +661,11 @@ send_list_tcp(struct socket_server *ss, struct socket *s, struct wb_list *list, 
 }
 
 /**
- *
- *
+ * @brief build sa by address 
+ * @param[s] s socket 
+ * @param[in] udp_address udp addres string
+ * @param[out] sa storage for udp msg
+ * @return sa len
  *
  */
 static socklen_t
@@ -673,11 +687,20 @@ udp_socket_address(struct socket *s, const uint8_t udp_address[UDP_ADDRESS_SIZE]
 		sa->s.sa_family = AF_INET6;
 		sa->v6.sin6_port = port;
 		memcpy(&sa->v6.sin6_addr, udp_address + 1 + sizeof(uint16_t), sizeof(sa->v6.sin6_addr));	// ipv4 address is 128 bits
+		                                                                                                    /*ipv6 address is 128 bit*/
 		return sizeof(sa->v6);
 	}
 	return 0;
 }
 
+/**
+ * @brief send udp msg
+ * @param[in] ss socket manager
+ * @param[in] s socket handle
+ * @param[in] list buffer wait to send
+ * @param[out] result for store function return 
+ *
+ */
 static int
 send_list_udp(struct socket_server *ss, struct socket *s, struct wb_list *list, struct socket_message *result) {
 	while (list->head) {
@@ -741,6 +764,12 @@ list_uncomplete(struct wb_list *s) {
 	return (void *)wb->ptr != wb->buffer;
 }
 
+/**
+ * @brief move one payload from low list to high
+ * @param[s] s socket handle`
+ *
+ *
+ */
 static void
 raise_uncomplete(struct socket * s) {
 	struct wb_list *low = &s->low;
@@ -797,15 +826,27 @@ send_buffer(struct socket_server *ss, struct socket *s, struct socket_message *r
 	return -1;
 }
 
+/**
+ * @brief appened new data into write buffer list
+ * @param[in] ss socket manager
+ * @param[in] s write buffer list
+ * @param[in] request request msg from usr
+ * @param[in] size size of buffer wait to send
+ * @param[in] n as the offset of the write_buffer
+ * 
+ *
+ */
 static struct write_buffer *
 append_sendbuffer_(struct socket_server *ss, struct wb_list *s, struct request_send * request, int size, int n) {
 	struct write_buffer * buf = MALLOC(size);
 	struct send_object so;
+	//build usrobject
 	buf->userobject = send_object_init(ss, &so, request->buffer, request->sz);
 	buf->ptr = (char*)so.buffer+n;
 	buf->sz = so.sz - n;
 	buf->buffer = request->buffer;
 	buf->next = NULL;
+	
 	if (s->head == NULL) {
 		s->head = s->tail = buf;
 	} else {
@@ -1034,8 +1075,15 @@ block_readpipe(int pipefd, void *buffer, int sz) {
 	}
 }
 
+/**
+ * @brief wait request msg from usr and slove this msg
+ * @param[ss] socket manager
+ *
+ */
 static int
 has_cmd(struct socket_server *ss) {
+        
+        /*nonblock */
 	struct timeval tv = {0,0};
 	int retval;
 
