@@ -159,7 +159,9 @@ skynet_socket_listen(struct skynet_context *ctx, const char *host, int port, int
  */
 int 
 skynet_socket_connect(struct skynet_context *ctx, const char *host, int port) {
+        /*index of the of module*/
 	uint32_t source = skynet_context_handle(ctx);
+	/*source as the the opaque*/
 	return socket_server_connect(SOCKET_SERVER, source, host, port);
 }
 

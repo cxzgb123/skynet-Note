@@ -1340,7 +1340,7 @@ send_request(struct socket_server *ss, struct request_package *request, char typ
 	request->header[6] = (uint8_t)type;
 	request->header[7] = (uint8_t)len;
 	for (;;) {
-	        /*just send two bytes*/
+	        /*seng ctrl msg to socket by pipe*/
 		int n = write(ss->sendctrl_fd, &request->header[6], len+2);
 		if (n<0) {
 			if (errno != EINTR) {
@@ -1379,17 +1379,27 @@ open_request(struct socket_server *ss, struct request_package *req, uintptr_t op
 	return len;
 }
 
+/**
+ * @brief build request msg and send to socket manager thread
+ * @param[in] socket_server socket manager
+ * @param[in] opaque id of the module
+ * @param[in] addr address string of the connect machine
+ * @param[in] port of the connect machine
+ */
 int 
 socket_server_connect(struct socket_server *ss, uintptr_t opaque, const char * addr, int port) {
 	struct request_package request;
+	/*try to build open request*/
 	int len = open_request(ss, &request, opaque, addr, port);
 	if (len < 0)
 		return -1;
+	/*send the request to the socket manager*/
 	send_request(ss, &request, 'O', sizeof(request.u.open) + len);
 	return request.u.open.id;
 }
 
 // return -1 when error
+//
 int64_t 
 socket_server_send(struct socket_server *ss, int id, const void * buffer, int sz) {
 	struct socket * s = &ss->slot[HASH_ID(id)];
