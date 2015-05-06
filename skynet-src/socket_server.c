@@ -113,58 +113,97 @@ struct socket_server {
 	fd_set rfds;        /*fd group*/
 };
 
+/**
+ * @brief msg used to connect to others 
+ *
+ */
 struct request_open {
-	int id;
-	int port;
-	uintptr_t opaque;
-	char host[1];
+	int id;                 /*id of the socket*/
+	int port;               /*port of the machine to be connected*/
+	uintptr_t opaque;       /*id of module*/
+	char host[1];           
 };
 
+/** 
+ *  @brief request to send data
+ *
+ */
 struct request_send {
-	int id;
-	int sz;
-	char * buffer;
+	int id;                 /*id of the socket*/
+	int sz;                 /*data size*/
+	char * buffer;          /*buffer ptr*/
 };
 
+/**
+ * @brief request udp msg wait to send
+ *
+ */
 struct request_send_udp {
-	struct request_send send;
-	uint8_t address[UDP_ADDRESS_SIZE];
+	struct request_send send;               /*payload*/
+	uint8_t address[UDP_ADDRESS_SIZE];      /*udp address*/
 };
 
 struct request_setudp {
-	int id;
+	int id;                             
 	uint8_t address[UDP_ADDRESS_SIZE];
 };
 
+/**
+ * @brief reuqst msg for  close 
+ *
+ */
 struct request_close {
-	int id;
-	uintptr_t opaque;
+	int id;                                 /*id of the socket*/
+	uintptr_t opaque;                       /*id of module*/
 };
 
+
+/**
+ * @brief request msg for listen
+ *
+ */
 struct request_listen {
-	int id;
-	int fd;
-	uintptr_t opaque;
+	int id;                                 /*id of the socket*/
+	int fd;                                 /*listem fd*/
+	uintptr_t opaque;                       /*id of the module*/
 	char host[1];
 };
 
+/**
+ * @brief request msg to bind
+ *
+ */
 struct request_bind {
-	int id;
-	int fd;
-	uintptr_t opaque;
+	int id;                                 /*id of the module*/
+	int fd;                                 /*bind file*/
+	uintptr_t opaque;                       /*id of the socket*/
 };
 
+/**
+ * @brief request socket start
+ *
+ *
+ */
 struct request_start {
-	int id;
-	uintptr_t opaque;
+	int id;                                 /*id of the socket*/
+	uintptr_t opaque;                       /*id of the module*/
 };
+
+/**
+ * @brief request to set socket
+ *
+ */
 
 struct request_setopt {
-	int id;
-	int what;
-	int value;
+	int id;                                 /*id of the socket*/
+	int what;                               /*key for setopt*/
+	int value;                              /*val for set key= val*/
 };
 
+/**
+ * @brief 
+ *
+ */
 struct request_udp {
 	int id;
 	int fd;
@@ -247,7 +286,8 @@ send_object_init(struct socket_server *ss, struct send_object *so, void *object,
 
 /**
  * @brief try to free write buffer
- *
+ * @brief ss socket manager
+ * @brief wb write buffer wait to free
  *
  */
 static inline void
@@ -260,6 +300,10 @@ write_buffer_free(struct socket_server *ss, struct write_buffer *wb) {
 	FREE(wb);
 }
 
+/**
+ * @brief socket install keepalive 
+ * @param[in]  fd socket wait to set keepalive
+ */
 static void
 socket_keepalive(int fd) {
 	int keepalive = 1;
@@ -473,9 +517,18 @@ new_fd(struct socket_server *ss, int id, int fd, int protocol, uintptr_t opaque,
 }
 
 // return -1 when connecting
+/**
+ * @brief open tcp socket 
+ * @param[in] ss socket manager
+ * @param[in] request request open msg
+ * @param[in] result get reult of open tcp
+ * @note try connect by epoll if EINPROGRESS occured in connect,so change to connecting status
+ *
+ */
 static int
 open_socket(struct socket_server *ss, struct request_open * request, struct socket_message *result) {
 	int id = request->id;
+	/*build result msg*/
 	result->opaque = request->opaque;
 	result->id = id;
 	result->ud = 0;
@@ -487,11 +540,13 @@ open_socket(struct socket_server *ss, struct request_open * request, struct sock
 	struct addrinfo *ai_ptr = NULL;
 	char port[16];
 	sprintf(port, "%d", request->port);
+
+        /*lookup address of the host*/
 	memset(&ai_hints, 0, sizeof( ai_hints ) );
 	ai_hints.ai_family = AF_UNSPEC;
 	ai_hints.ai_socktype = SOCK_STREAM;
 	ai_hints.ai_protocol = IPPROTO_TCP;
-
+        
 	status = getaddrinfo( request->host, port, &ai_hints, &ai_list );
 	if ( status != 0 ) {
 		goto _failed;
@@ -502,21 +557,26 @@ open_socket(struct socket_server *ss, struct request_open * request, struct sock
 		if ( sock < 0 ) {
 			continue;
 		}
+		/*install keepalive*/
 		socket_keepalive(sock);
+		/*set socket nonblock*/
 		sp_nonblocking(sock);
+		/*try to connect to the host*/
 		status = connect( sock, ai_ptr->ai_addr, ai_ptr->ai_addrlen);
 		if ( status != 0 && errno != EINPROGRESS) {
+		    /*close sock if fail*/
 			close(sock);
 			sock = -1;
 			continue;
 		}
+                /*EINPOTGESS !! , so we try to connect next time*/
 		break;
 	}
 
 	if (sock < 0) {
 		goto _failed;
 	}
-
+	/*get a new socket*/
 	ns = new_fd(ss, id, sock, PROTOCOL_TCP, request->opaque, true);
 	if (ns == NULL) {
 		close(sock);
@@ -533,6 +593,7 @@ open_socket(struct socket_server *ss, struct request_open * request, struct sock
 		freeaddrinfo( ai_list );
 		return SOCKET_OPEN;
 	} else {
+	        /*we'll try connect next time*/
 		ns->type = SOCKET_TYPE_CONNECTING;
 		sp_write(ss->event_fd, ns->fd, ns, true);
 	}
@@ -545,6 +606,12 @@ _failed:
 	return SOCKET_ERROR;
 }
 
+/**
+ * @brief send msg to tcp socket in socket manager
+ * @param[in] ss socket manger
+ * @param[in] list  list of payload wait to send 
+ * @param[out] result msg result 
+ */ 
 static int
 send_list_tcp(struct socket_server *ss, struct socket *s, struct wb_list *list, struct socket_message *result) {
 	while (list->head) {
@@ -553,14 +620,19 @@ send_list_tcp(struct socket_server *ss, struct socket *s, struct wb_list *list, 
 			int sz = write(s->fd, tmp->ptr, tmp->sz);
 			if (sz < 0) {
 				switch(errno) {
+
 				case EINTR:
+				        /*other interupt, so we try again*/
 					continue;
 				case EAGAIN:
+				        /*nonblock write, may buffer full! so try next time*/
 					return -1;
 				}
+				/*error, so close socket*/
 				force_close(ss,s, result);
 				return SOCKET_CLOSE;
 			}
+			/*write buffer into socket here*/
 			s->wb_size -= sz;
 			if (sz != tmp->sz) {
 				tmp->ptr += sz;
@@ -577,6 +649,11 @@ send_list_tcp(struct socket_server *ss, struct socket *s, struct wb_list *list, 
 	return -1;
 }
 
+/**
+ *
+ *
+ *
+ */
 static socklen_t
 udp_socket_address(struct socket *s, const uint8_t udp_address[UDP_ADDRESS_SIZE], union sockaddr_all *sa) {
 	int type = (uint8_t)udp_address[0];
@@ -636,11 +713,21 @@ send_list_udp(struct socket_server *ss, struct socket *s, struct wb_list *list, 
 	return -1;
 }
 
+/**
+ * @brief send buffer into socket
+ * @param[in] socket manager
+ * @param[in] socket socket which buffer send  to 
+ * @param[in] list buffer wait to send
+ * @param[in] result result used to hold return msg
+ *
+ */
 static int
 send_list(struct socket_server *ss, struct socket *s, struct wb_list *list, struct socket_message *result) {
 	if (s->protocol == PROTOCOL_TCP) {
+	    /*tcp support*/
 		return send_list_tcp(ss, s, list, result);
 	} else {
+	    /*udp support*/
 		return send_list_udp(ss, s, list, result);
 	}
 }
