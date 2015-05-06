@@ -20,14 +20,14 @@
 #define MAX_SOCKET_P 16
 #define MAX_EVENT 64
 #define MIN_READ_BUFFER 64
-#define SOCKET_TYPE_INVALID 0
-#define SOCKET_TYPE_RESERVE 1
-#define SOCKET_TYPE_PLISTEN 2
-#define SOCKET_TYPE_LISTEN 3
-#define SOCKET_TYPE_CONNECTING 4
-#define SOCKET_TYPE_CONNECTED 5
-#define SOCKET_TYPE_HALFCLOSE 6
-#define SOCKET_TYPE_PACCEPT 7
+#define SOCKET_TYPE_INVALID 0       /*invalid flag*/
+#define SOCKET_TYPE_RESERVE 1       /*socket empty*/
+#define SOCKET_TYPE_PLISTEN 2       /*build socket before listen*/
+#define SOCKET_TYPE_LISTEN 3        /*start listen*/
+#define SOCKET_TYPE_CONNECTING 4    /*try to connect but not success connected*/
+#define SOCKET_TYPE_CONNECTED 5     /*skynet connect to others success*/
+#define SOCKET_TYPE_HALFCLOSE 6     /*half close, so we can trans more data*/
+#define SOCKET_TYPE_PACCEPT 7       /*others connect to skynet success*/
 #define SOCKET_TYPE_BIND 8
 
 #define MAX_SOCKET (1<<MAX_SOCKET_P)
@@ -977,6 +977,13 @@ set_udp_address(struct socket_server *ss, struct request_setudp *request, struct
 }
 
 // return type
+/**
+ * @brief socket manager process by the result message from the usr by pipe
+ * @param[in] socket manager
+ * @param[in] result result msg from the usr
+ *
+ *
+ */
 static int
 ctrl_cmd(struct socket_server *ss, struct socket_message *result) {
 	int fd = ss->recvctrl_fd;
