@@ -299,6 +299,10 @@ reserve_id(struct socket_server *ss) {
 	return -1;
 }
 
+/**
+ * @brief init the write buffer list
+ * @param[in] wb_list write buffer list
+ */
 static inline void
 clear_wb_list(struct wb_list *list) {
 	list->head = NULL;
@@ -366,6 +370,11 @@ socket_server_create() {
 	return ss;
 }
 
+/**
+ * @brief free all data in write buffer list and init the write_buffer list
+ * @param[in] socket manager
+ * @param[in] list write buffer list
+ */
 static void
 free_wb_list(struct socket_server *ss, struct wb_list *list) {
 	struct write_buffer *wb = list->head;
@@ -378,6 +387,12 @@ free_wb_list(struct socket_server *ss, struct wb_list *list) {
 	list->tail = NULL;
 }
 
+/**
+ * @brief force close the socket
+ * @param[in] ss socket manager
+ * @param[in] s socket wait to close
+ * @param[out] result result msg from the function
+ */ 
 static void
 force_close(struct socket_server *ss, struct socket *s, struct socket_message *result) {
 	result->id = s->id;
@@ -399,22 +414,35 @@ force_close(struct socket_server *ss, struct socket *s, struct socket_message *r
 	s->type = SOCKET_TYPE_INVALID;
 }
 
+
+/**
+ * @brief release all things in socket manager
+ * @param[in] ss socket manager
+ *
+ */
 void 
 socket_server_release(struct socket_server *ss) {
 	int i;
 	struct socket_message dummy;
+	/*release the socket */
 	for (i=0;i<MAX_SOCKET;i++) {
 		struct socket *s = &ss->slot[i];
 		if (s->type != SOCKET_TYPE_RESERVE) {
 			force_close(ss, s , &dummy);
 		}
 	}
+	/*close ctrl pipe*/
 	close(ss->sendctrl_fd);
 	close(ss->recvctrl_fd);
+	/*close epoll*/
 	sp_release(ss->event_fd);
 	FREE(ss);
 }
 
+/**
+ * @brief check the write buffer list
+ * @param[in] s write buffer list
+ */
 static inline void
 check_wb_list(struct wb_list *s) {
 	assert(s->head == NULL);
