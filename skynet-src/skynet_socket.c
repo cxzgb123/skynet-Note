@@ -36,6 +36,12 @@ skynet_socket_free() {
 }
 
 // mainloop thread
+/**
+ * @brief send the event to the usr module 
+ * @param[in] type what happened 
+ * @param[in] padding exist data in result->data
+ * @param[in] result result msg want to send 
+ */
 static void
 forward_message(int type, bool padding, struct socket_message * result) {
 	struct skynet_socket_message *sm;

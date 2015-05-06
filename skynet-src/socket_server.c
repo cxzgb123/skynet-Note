@@ -55,9 +55,9 @@ struct write_buffer {
 	struct write_buffer * next; /*link all buffer as a list*/
 	void *buffer;               /*store the data in the buffer*/
 	char *ptr;
-	int sz;
-	bool userobject;
-	uint8_t udp_address[UDP_ADDRESS_SIZE];
+	int sz;                     /*buffer size*/
+	bool userobject;            /*mark if the meme managered by usr*/
+	uint8_t udp_address[UDP_ADDRESS_SIZE]; /*address want to  send to*/
 };
 
 #define SIZEOF_TCPBUFFER (offsetof(struct write_buffer, udp_address[0]))
@@ -106,8 +106,8 @@ struct socket_server {
 	int event_n;
 	int event_index;
 	struct socket_object_interface soi;
-	struct event ev[MAX_EVENT];
-	struct socket slot[MAX_SOCKET]; 
+	struct event ev[MAX_EVENT];     /*used to get event when call epoll*/
+	struct socket slot[MAX_SOCKET]; /*store all the socket*/
 	char buffer[MAX_INFO];
 	uint8_t udpbuffer[MAX_UDP_PACKAGE];
 	fd_set rfds;        /*fd group*/
@@ -222,6 +222,14 @@ struct send_object {
 #define MALLOC skynet_malloc
 #define FREE skynet_free
 
+/**
+ * @brief conect oject tp sed_object
+ * @param[in] ss socket manager
+ * @param[in] so warp of object
+ * @param[in] object org object
+ * @param[in] sz sz < 0 ? object mem managered by usr api : object mem managered by skynet api
+ * 
+ */
 static inline bool
 send_object_init(struct socket_server *ss, struct send_object *so, void *object, int sz) {
 	if (sz < 0) {
@@ -237,6 +245,11 @@ send_object_init(struct socket_server *ss, struct send_object *so, void *object,
 	}
 }
 
+/**
+ * @brief try to free write buffer
+ *
+ *
+ */
 static inline void
 write_buffer_free(struct socket_server *ss, struct write_buffer *wb) {
 	if (wb->userobject) {
@@ -1119,24 +1132,36 @@ forward_message_udp(struct socket_server *ss, struct socket *s, struct socket_me
 	return SOCKET_UDP;
 }
 
+/**
+ * @brief register the write evnet and build repoert msg when connect success
+ * @param[in] ss socket manager
+ * @param[in] s socket active 
+ * @param[out] result hold the connect success report msg
+ */
 static int
 report_connect(struct socket_server *ss, struct socket *s, struct socket_message *result) {
 	int error;
+	/*check socket*/
 	socklen_t len = sizeof(error);  
 	int code = getsockopt(s->fd, SOL_SOCKET, SO_ERROR, &error, &len);  
 	if (code < 0 || error) {  
 		force_close(ss,s, result);
 		return SOCKET_ERROR;
 	} else {
+	        /*chang socket status*/
 		s->type = SOCKET_TYPE_CONNECTED;
+
+		/*build msg*/
 		result->opaque = s->opaque;
 		result->id = s->id;
 		result->ud = 0;
+		/*register the write event*/
 		if (send_buffer_empty(s)) {
 			sp_write(ss->event_fd, s->fd, s, false);
 		}
 		union sockaddr_all u;
 		socklen_t slen = sizeof(u);
+		/*get the peer address*/
 		if (getpeername(s->fd, &u.s, &slen) == 0) {
 			void * sin_addr = (u.s.sa_family == AF_INET) ? (void*)&u.v4.sin_addr : (void *)&u.v6.sin6_addr;
 			if (inet_ntop(u.s.sa_family, sin_addr, ss->buffer, sizeof(ss->buffer))) {
@@ -1332,15 +1357,13 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
  * @param[in] msg store
  * @param[in] type msg type
  * @param[in] msg tot len
- *
- *
  */
 static void
 send_request(struct socket_server *ss, struct request_package *request, char type, int len) {
 	request->header[6] = (uint8_t)type;
 	request->header[7] = (uint8_t)len;
 	for (;;) {
-	        /*seng ctrl msg to socket by pipe*/
+	        /*send ctrl msg to socket by pipe*/
 		int n = write(ss->sendctrl_fd, &request->header[6], len+2);
 		if (n<0) {
 			if (errno != EINTR) {
@@ -1354,9 +1377,12 @@ send_request(struct socket_server *ss, struct request_package *request, char typ
 }
 
 /**
- * 
- *
- *
+ * @brief build the open request msg
+ * @param[in] ss socket manager
+ * @param[in] req the msg want to build
+ * @param[in] opaque the id of the socket to open
+ * @param[in] addr address string of the connect machine
+ * @param[in] port of the connect machine
  *
  */
 static int
