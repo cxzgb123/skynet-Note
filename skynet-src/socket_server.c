@@ -54,7 +54,7 @@
 struct write_buffer {
 	struct write_buffer * next; /*link all buffer as a list*/
 	void *buffer;               /*store the data in the buffer*/
-	char *ptr;
+	char *ptr;                  /*point to the start of the partial wait to send*/
 	int sz;                     /*buffer size*/
 	bool userobject;            /*mark if the meme managered by usr*/
 	uint8_t udp_address[UDP_ADDRESS_SIZE]; /*address want to  send to*/
@@ -89,7 +89,7 @@ struct socket {
 	uint16_t type;
 	union {
 		int size;
-		uint8_t udp_address[UDP_ADDRESS_SIZE];
+		uint8_t udp_address[UDP_ADDRESS_SIZE]; /*udp address of the udp socket*/
 	} p;
 };
 
@@ -105,12 +105,12 @@ struct socket_server {
 	int alloc_id;       /*curr id alloc for socket, socket_id = HASH_ID(alloc_id < 0 ? alloc + 0x7fffffff, alloc_id)*/
 	int event_n;
 	int event_index;
-	struct socket_object_interface soi;
-	struct event ev[MAX_EVENT];     /*used to get event when call epoll*/
-	struct socket slot[MAX_SOCKET]; /*store all the socket*/
+	struct socket_object_interface soi; /*used when need manager data by user api */
+	struct event ev[MAX_EVENT];         /*used to get event when call epoll*/
+	struct socket slot[MAX_SOCKET];     /*store all the socket*/
 	char buffer[MAX_INFO];
 	uint8_t udpbuffer[MAX_UDP_PACKAGE];
-	fd_set rfds;        /*fd group*/
+	fd_set rfds;                        /*fd group*/
 };
 
 /**
@@ -143,9 +143,15 @@ struct request_send_udp {
 	uint8_t address[UDP_ADDRESS_SIZE];      /*udp address*/
 };
 
+/**
+ * @brief request used to set udp socket address
+ * @param[in] id id of the socket
+ * @param[in] address string address of the  udp socket
+ *
+ */
 struct request_setudp {
-	int id;                             
-	uint8_t address[UDP_ADDRESS_SIZE];
+	int id;                                 /*id of the socket*/
+	uint8_t address[UDP_ADDRESS_SIZE];      /*string address of the udp*/
 };
 
 /**
@@ -246,10 +252,14 @@ struct request_package {
 	uint8_t dummy[256];
 };
 
+/**
+ * @breif normal sockaddr storage
+ *
+ */
 union sockaddr_all {
-	struct sockaddr s;
-	struct sockaddr_in v4;
-	struct sockaddr_in6 v6;
+	struct sockaddr s;          /*normal storage*/
+	struct sockaddr_in v4;      /*ipv4 storage*/
+	struct sockaddr_in6 v6;     /*ipv6 storage*/
 };
 
 /**
@@ -258,9 +268,9 @@ union sockaddr_all {
  *
  */
 struct send_object {
-	void * buffer;
-	int sz;
-	void (*free_func)(void *);
+	void * buffer;                          /*payload*/
+	int sz;                                 /*size of payload*/
+	void (*free_func)(void *);              /*callback used to free plaload*/
 };
 
 #define MALLOC skynet_malloc
@@ -394,7 +404,7 @@ socket_server_create() {
 	/*store the epoll handle in manager*/
 	ss->event_fd = efd;
 
-	/*here!! You see pipe work as the ctrl way*/
+	/*here!! You see, pipe get the request msg from module to socket*/
 	/*store the */
 
         /*store the fd of pipe in socket manager*/
@@ -755,6 +765,11 @@ send_list(struct socket_server *ss, struct socket *s, struct wb_list *list, stru
 	}
 }
 
+/**
+ * @brief check if there is partial in the head of write_buffer list
+ * @param[in] s write buffer list
+ *
+ */
 static inline int
 list_uncomplete(struct wb_list *s) {
 	struct write_buffer *wb = s->head;
@@ -833,8 +848,7 @@ send_buffer(struct socket_server *ss, struct socket *s, struct socket_message *r
  * @param[in] request request msg from usr
  * @param[in] size size of buffer wait to send
  * @param[in] n as the offset of the write_buffer
- * 
- *
+ * @return new write buffer handle
  */
 static struct write_buffer *
 append_sendbuffer_(struct socket_server *ss, struct wb_list *s, struct request_send * request, int size, int n) {
@@ -842,6 +856,7 @@ append_sendbuffer_(struct socket_server *ss, struct wb_list *s, struct request_s
 	struct send_object so;
 	//build usrobject
 	buf->userobject = send_object_init(ss, &so, request->buffer, request->sz);
+	/*here!!! valid data of write buffer maybe a partital*/
 	buf->ptr = (char*)so.buffer+n;
 	buf->sz = so.sz - n;
 	buf->buffer = request->buffer;
@@ -858,14 +873,30 @@ append_sendbuffer_(struct socket_server *ss, struct wb_list *s, struct request_s
 	return buf;
 }
 
+/**
+ * @brief append to write_buffer
+ * @param[in] ss socket manager
+ * @param[in] s socket 
+ * @param[in] requesst hold the payload wait to send
+ * @param[in] string address of the udp
+ *
+ */
 static inline void
 append_sendbuffer_udp(struct socket_server *ss, struct socket *s, int priority, struct request_send * request, const uint8_t udp_address[UDP_ADDRESS_SIZE]) {
 	struct wb_list *wl = (priority == PRIORITY_HIGH) ? &s->high : &s->low;
 	struct write_buffer *buf = append_sendbuffer_(ss, wl, request, SIZEOF_UDPBUFFER, 0);
 	memcpy(buf->udp_address, udp_address, UDP_ADDRESS_SIZE);
+	/*update the tot payload size of the write buffer*/
 	s->wb_size += buf->sz;
 }
 
+/**
+ * @brief append new payload as a write buffer into write buffer list
+ * @param[in] ss socket manager
+ * @param[in] s socket
+ * @param[in] request  new payload wait to sendd
+ *
+ */
 static inline void
 append_sendbuffer(struct socket_server *ss, struct socket *s, struct request_send * request, int n) {
 	struct write_buffer *buf = append_sendbuffer_(ss, &s->high, request, SIZEOF_TCPBUFFER, n);
@@ -878,6 +909,10 @@ append_sendbuffer_low(struct socket_server *ss,struct socket *s, struct request_
 	s->wb_size += buf->sz;
 }
 
+/**
+ * @brief check if the write buffer is empty
+ *
+ */
 static inline int
 send_buffer_empty(struct socket *s) {
 	return (s->high.head == NULL && s->low.head == NULL);
@@ -1486,12 +1521,14 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 			fprintf(stderr, "socket-server: invalid socket\n");
 			break;
 		default:
-		        /*get usr msg from socket*/
+		        /*read msg from  from socket*/
 			if (e->read) {
 				int type;
 				if (s->protocol == PROTOCOL_TCP) {
+				        /*forward the tcp msg*/
 					type = forward_message_tcp(ss, s, result);
 				} else {
+				        /*forward the udp msg*/
 					type = forward_message_udp(ss, s, result);
 					if (type == SOCKET_UDP) {
 						// try read again

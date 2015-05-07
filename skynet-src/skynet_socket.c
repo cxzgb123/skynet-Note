@@ -23,12 +23,19 @@ skynet_socket_init() {
 	SOCKET_SERVER = socket_server_create();
 }
 
-
+/**
+ * @brief exit the socket thread
+ */
 void
 skynet_socket_exit() {
 	socket_server_exit(SOCKET_SERVER);
 }
 
+/**
+ * @brief delete all of the socket thread
+ *
+ *
+ */
 void
 skynet_socket_free() {
 	socket_server_release(SOCKET_SERVER);
@@ -78,7 +85,6 @@ forward_message(int type, bool padding, struct socket_message * result) {
 	}
 }
 
-
 /**
  * @brief as door of this server, accept client, 
  *  get client msg forward it to module, wirte msg to client
@@ -88,6 +94,7 @@ int
 skynet_socket_poll() {
 	struct socket_server *ss = SOCKET_SERVER;
 	assert(ss);
+	/*result used to hold return msg from the socket_server_poll*/
 	struct socket_message result;
 	int more = 1;
 	/*wait evnet occured*/

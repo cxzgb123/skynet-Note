@@ -35,9 +35,9 @@ sp_create() {
  */
 static void
 sp_release(int efd) {
+        /*close handle of the epoll*/
 	close(efd);
 }
-
 
 /**
  * @brief register a epoll read event 
@@ -64,7 +64,6 @@ static void
 sp_del(int efd, int sock) {
 	epoll_ctl(efd, EPOLL_CTL_DEL, sock , NULL);
 }
-
 
 /**
  * @brief register event of write
@@ -107,7 +106,7 @@ sp_wait(int efd, struct event *e, int max) {
 
 /**
  * @brief set the fd in nonblock
- *
+ * @param[in] fd fd of the socket
  *
  */
 static void
