@@ -1,3 +1,11 @@
+/**
+ * @file socket_server.c
+ * @brief api for socket
+ * @note 1.api for build and send request to server thread
+ *       2.api used to deal with the request msg from other module
+ *
+ */
+
 #include "skynet.h"
 
 #include "socket_server.h"
@@ -1760,9 +1768,12 @@ socket_server_connect(struct socket_server *ss, uintptr_t opaque, const char * a
 //
 //
 /**
- *
- *
- *
+ * @brief build and send payload high 
+ * @param[in] ss socket manager
+ * @param[in] id socket id
+ * @param[in] buffer payload of the msg to send
+ * @param[in] sz size of the payload wait to send
+ * @return tot size of the socket's write payload 
  */
 int64_t 
 socket_server_send(struct socket_server *ss, int id, const void * buffer, int sz) {
@@ -1780,6 +1791,14 @@ socket_server_send(struct socket_server *ss, int id, const void * buffer, int sz
 	return s->wb_size;
 }
 
+/**
+ * @brief build and send payload low
+ * @param[in] ss socket manager
+ * @param[in] id socket id
+ * @param[in] buffer payload of the msg to send
+ * @param[in] sz size of the payload wait to send
+ * @return tot size of the socket's write payload 
+ */
 void 
 socket_server_send_lowpriority(struct socket_server *ss, int id, const void * buffer, int sz) {
 	struct socket * s = &ss->slot[HASH_ID(id)];
@@ -1806,6 +1825,13 @@ socket_server_exit(struct socket_server *ss) {
 	send_request(ss, &request, 'X', 0);
 }
 
+/**
+ * @brief build and send close request
+ * @param[in] ss socket manager
+ * @param[in] opaque module id if the caller
+ * @param[in] id id of the socket
+ *
+ */
 void
 socket_server_close(struct socket_server *ss, uintptr_t opaque, int id) {
 	struct request_package request;
