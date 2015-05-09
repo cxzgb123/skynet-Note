@@ -17,9 +17,9 @@
 
 #define MAX_INFO 128
 // MAX_SOCKET will be 2^MAX_SOCKET_P
-#define MAX_SOCKET_P 16
-#define MAX_EVENT 64
-#define MIN_READ_BUFFER 64
+#define MAX_SOCKET_P 16             /*max socket will be 2^MAX_SOCKET_P*/  
+#define MAX_EVENT 64                /*max event can hold*/
+#define MIN_READ_BUFFER 64          /*origin read buffer for tcp*/
 #define SOCKET_TYPE_INVALID 0       /*invalid flag*/
 #define SOCKET_TYPE_RESERVE 1       /*socket empty*/
 #define SOCKET_TYPE_PLISTEN 2       /*build socket before listen*/
@@ -30,42 +30,39 @@
 #define SOCKET_TYPE_PACCEPT 7       /*others connect to skynet success*/
 #define SOCKET_TYPE_BIND 8          /*bind the address*/
 
-#define MAX_SOCKET (1<<MAX_SOCKET_P)
+#define MAX_SOCKET (1<<MAX_SOCKET_P)/*max socket*/ 
 
-#define PRIORITY_HIGH 0
-#define PRIORITY_LOW 1
+#define PRIORITY_HIGH 0             /*high write buffer list*/
+#define PRIORITY_LOW 1              /*low write buffer list*/
 
 /*hash function*/
-#define HASH_ID(id) (((unsigned)id) % MAX_SOCKET)
+#define HASH_ID(id) (((unsigned)id) % MAX_SOCKET) /*convert id to socket slot's index*/
 
-#define PROTOCOL_TCP 0
-#define PROTOCOL_UDP 1
-#define PROTOCOL_UDPv6 2
+#define PROTOCOL_TCP 0              /*tcp*/
+#define PROTOCOL_UDP 1              /*udp*/
+#define PROTOCOL_UDPv6 2            /*udpv6*/
 
-#define UDP_ADDRESS_SIZE 19	// ipv6 128bit + port 16bit + 1 byte type
+#define UDP_ADDRESS_SIZE 19	    // ipv6 128bit + port 16bit + 1 byte type
 
-#define MAX_UDP_PACKAGE 65535
+#define MAX_UDP_PACKAGE 65535       /*max payload for udp*/
 
 /**
  * @brief buffer wait to write
- *
- *
  */
 struct write_buffer {
 	struct write_buffer * next; /*link all buffer as a list*/
-	void *buffer;               /*store the data in the buffer*/
+	void *buffer;               /*store the payload wait to write*/
 	char *ptr;                  /*point to the start of the partial wait to send*/
-	int sz;                     /*buffer size*/
-	bool userobject;            /*mark if the meme managered by usr*/
-	uint8_t udp_address[UDP_ADDRESS_SIZE]; /*address want to  send to*/
+	int sz;                     /*payload size*/
+	bool userobject;            /*mark if the mem managered by usr*/
+	uint8_t udp_address[UDP_ADDRESS_SIZE]; /*udp address want to  send to*/
 };
 
 #define SIZEOF_TCPBUFFER (offsetof(struct write_buffer, udp_address[0]))
 #define SIZEOF_UDPBUFFER (sizeof(struct write_buffer))
 
 /**
- * @brief data wait to write linked together as a list
- *
+ * @brief payload wait to write linked together as a list
  */
 struct wb_list {
 	struct write_buffer * head; /*head of the write list*/
@@ -74,69 +71,63 @@ struct wb_list {
 
 
 /**
- * @brief manager of the socket
- *
- *
+ * @brief manager all the socket
  */
 struct socket {
 	uintptr_t opaque;   /*id of the module socket belong to*/
 	struct wb_list high;/*high rate write buffer list*/    
 	struct wb_list low; /*low  rate write buffer list*/
-	int64_t wb_size;    /*size of the payload wait to send*/
+	int64_t wb_size;    /*tot size of the payload wait to send*/
 	int fd;             /*socket fd*/
 	int id;             /*id alloc for this socket*/ 
 	uint16_t protocol;  /*link protocol*/
 	uint16_t type;      /*status of the socket*/
 	union {
-		int size;
+		int size;   /*tcp read buffer size*/
 		uint8_t udp_address[UDP_ADDRESS_SIZE]; /*udp address of the udp socket*/
 	} p;
 };
 
 /**
- * @brief manager of all socket
- *
+ * @brief manager of all socket thread
  */
 struct socket_server {
 	int recvctrl_fd;    /*read fd of pipe*/
 	int sendctrl_fd;    /*send fd of pipe*/
-	int checkctrl;      
+	int checkctrl;      /*mark if check the ctrl msg from pipe*/ 
 	poll_fd event_fd;   /*epoll handle*/
 	int alloc_id;       /*curr id alloc for socket, socket_id = HASH_ID(alloc_id < 0 ? alloc + 0x7fffffff, alloc_id)*/
-	int event_n;
-	int event_index;
-	struct socket_object_interface soi; /*used when need manager data by user api */
+	int event_n;        /*tot event occured*/
+	int event_index;    /*idx of the event need to solve*/
+	struct socket_object_interface soi; /*used when need ctrl payload by user api*/
 	struct event ev[MAX_EVENT];         /*used to get event when call epoll*/
 	struct socket slot[MAX_SOCKET];     /*store all the socket*/
 	char buffer[MAX_INFO];
-	uint8_t udpbuffer[MAX_UDP_PACKAGE];
+	uint8_t udpbuffer[MAX_UDP_PACKAGE]; /*buffer used to recive udp msg*/
 	fd_set rfds;                        /*fd group*/
 };
 
 /**
  * @brief msg used to connect to others 
- *
  */
 struct request_open {
 	int id;                 /*id of the socket*/
 	int port;               /*port of the machine to be connected*/
 	uintptr_t opaque;       /*id of module socket belong to*/
-	char host[1];           
+	char host[1];           /*host if the socket need to open*/   
 };
 
 /** 
  *  @brief request to send data
- *
  */
 struct request_send {
 	int id;                 /*id of the socket*/
 	int sz;                 /*data size*/
-	char * buffer;          /*buffer ptr*/
+	char * buffer;          /*payload ptr*/
 };
 
 /**
  * @brief request udp msg wait to send
- *
  */
 struct request_send_udp {
 	struct request_send send;               /*payload*/
@@ -147,7 +138,6 @@ struct request_send_udp {
  * @brief request used to set udp socket address
  * @param[in] id id of the socket
  * @param[in] address string address of the  udp socket
- *
  */
 struct request_setudp {
 	int id;                                 /*id of the socket*/
@@ -155,29 +145,25 @@ struct request_setudp {
 };
 
 /**
- * @brief reuqst msg for  close 
- *
+ * @brief reuquest msg for  close socket
  */
 struct request_close {
 	int id;                                 /*id of the socket*/
 	uintptr_t opaque;                       /*id of module socket belong to*/
 };
 
-
 /**
  * @brief request msg for listen
- *
  */
 struct request_listen {
 	int id;                                 /*id of the socket*/
 	int fd;                                 /*listem fd*/
 	uintptr_t opaque;                       /*id of the module socket belong to*/
-	char host[1];
+	char host[1];                           /*TODO not used???*/
 };
 
 /**
  * @brief request msg to bind
- *
  */
 struct request_bind {
 	int id;                                 /*id of the socket*/
@@ -187,8 +173,6 @@ struct request_bind {
 
 /**
  * @brief request socket start
- *
- *
  */
 struct request_start {
 	int id;                                 /*id of the socket*/
@@ -197,9 +181,7 @@ struct request_start {
 
 /**
  * @brief request to set socket
- *
  */
-
 struct request_setopt {
 	int id;                                 /*id of the socket*/
 	int what;                               /*key for setopt*/
@@ -207,8 +189,7 @@ struct request_setopt {
 };
 
 /**
- * @brief 
- *
+ * @brief to init udp socket
  */
 struct request_udp {
 	int id;                                 /*id of the s*/
@@ -233,7 +214,6 @@ struct request_udp {
 	U Create UDP socket
 	C set udp address
  */
-
 struct request_package {
 	uint8_t header[8];	// 6 bytes dummy
 	union {
@@ -253,7 +233,7 @@ struct request_package {
 };
 
 /**
- * @breif normal sockaddr storage
+ * @brief normal sockaddr storage
  *
  */
 union sockaddr_all {
@@ -264,20 +244,18 @@ union sockaddr_all {
 
 /**
  * @brief warp of obj wait to send
- *
- *
  */
 struct send_object {
 	void * buffer;                          /*payload*/
 	int sz;                                 /*size of payload*/
-	void (*free_func)(void *);              /*callback used to free plaload*/
+	void (*free_func)(void *);              /*callback used to free payload*/
 };
 
 #define MALLOC skynet_malloc
 #define FREE skynet_free
 
 /**
- * @brief conect oject tp sed_object
+ * @brief convert oject to send_object
  * @param[in] ss socket manager
  * @param[in] so warp of object
  * @param[in] object org object
@@ -298,6 +276,7 @@ send_object_init(struct socket_server *ss, struct send_object *so, void *object,
 		return false;
 	}
 }
+
 
 /**
  * @brief try to free write buffer
@@ -343,7 +322,7 @@ reserve_id(struct socket_server *ss) {
 		}
 		/*lookup slot by hash*/
 		struct socket *s = &ss->slot[HASH_ID(id)];
-		/*尝试将空槽占用*/
+		/*try to get the empty slots*/
 		if (s->type == SOCKET_TYPE_INVALID) {
 			if (__sync_bool_compare_and_swap(&s->type, SOCKET_TYPE_INVALID, SOCKET_TYPE_RESERVE)) {
 				s->id = id;
@@ -377,7 +356,7 @@ struct socket_server *
 socket_server_create() {
 	int i;
 	int fd[2];
-	/*handle for epoll*/
+	/*handle for epoll init*/
 	poll_fd efd = sp_create();
 	if (sp_invalid(efd)) {
 		fprintf(stderr, "socket-server: create event pool failed.\n");
@@ -389,7 +368,7 @@ socket_server_create() {
 		fprintf(stderr, "socket-server: create socket pair failed.\n");
 		return NULL;
 	}
-	/*listen read of pipe*/
+	/*listen read of pipe to recive the msg from the module*/
 	if (sp_add(efd, fd[0], NULL)) {
 		// add recvctrl_fd to event poll
 		fprintf(stderr, "socket-server: can't add server fd to event pool.\n");
@@ -399,17 +378,18 @@ socket_server_create() {
 		return NULL;
 	}
 
-       /*alloc socket manager*/
+        /*alloc socket manager*/
 	struct socket_server *ss = MALLOC(sizeof(*ss));
 	/*store the epoll handle in manager*/
 	ss->event_fd = efd;
 
 	/*here!! You see, pipe get the request msg from module to socket*/
-	/*store the */
 
         /*store the fd of pipe in socket manager*/
 	ss->recvctrl_fd = fd[0];
 	ss->sendctrl_fd = fd[1];
+
+	/*check ctrl in default*/
 	ss->checkctrl = 1;
 
 	/*init all socket handle*/
@@ -430,7 +410,7 @@ socket_server_create() {
 }
 
 /**
- * @brief free all data in write buffer list and init the write_buffer list
+ * @brief free all in write buffer list and init the write_buffer list
  * @param[in] socket manager
  * @param[in] list write buffer list
  */
@@ -477,7 +457,6 @@ force_close(struct socket_server *ss, struct socket *s, struct socket_message *r
 /**
  * @brief release all things in socket manager
  * @param[in] ss socket manager
- *
  */
 void 
 socket_server_release(struct socket_server *ss) {
@@ -499,7 +478,7 @@ socket_server_release(struct socket_server *ss) {
 }
 
 /**
- * @brief check the write buffer list
+ * @brief check the write buffer list if it is empty
  * @param[in] s write buffer list
  */
 static inline void
@@ -516,8 +495,7 @@ check_wb_list(struct wb_list *s) {
  * @param[in] protocol protocol for the socket
  * @param[in] opaque id of the module create this socket 
  * @param[in] add  flag that if need register read event
- *
- *
+ * return success ? socket : NULL
  */
 static struct socket *
 new_fd(struct socket_server *ss, int id, int fd, int protocol, uintptr_t opaque, bool add) {
@@ -533,15 +511,16 @@ new_fd(struct socket_server *ss, int id, int fd, int protocol, uintptr_t opaque,
 		}
 	}
 
-	s->id = id; /*record the socket id*/
-	s->fd = fd; /*record the socket file description*/
-	s->protocol = protocol; /*record the protocol*/
+	s->id = id;                  /*record the socket id*/
+	s->fd = fd;                  /*record the socket file description*/
+	s->protocol = protocol;      /*record the protocol*/
 	s->p.size = MIN_READ_BUFFER; /*set the origin read buffer size*/
 	s->opaque = opaque;          /*record the module id*/
+
 	/*init the write buffer*/
 	s->wb_size = 0;
-	check_wb_list(&s->high);
-	check_wb_list(&s->low);
+	check_wb_list(&s->high);    /*high rate payload list*/
+	check_wb_list(&s->low);     /*loew rate payload list*/
 	return s;
 }
 
@@ -550,8 +529,9 @@ new_fd(struct socket_server *ss, int id, int fd, int protocol, uintptr_t opaque,
  * @brief open tcp socket 
  * @param[in] ss socket manager
  * @param[in] request request open msg
- * @param[in] result get reult of open tcp
- * @note try connect by epoll if EINPROGRESS occured in connect,so change to connecting status
+ * @param[in] result get result of open tcp
+ * @note 
+ * change to connecting status when EINPROGRESS occured in connecting,
  *
  */
 static int
@@ -570,12 +550,12 @@ open_socket(struct socket_server *ss, struct request_open * request, struct sock
 	char port[16];
 	sprintf(port, "%d", request->port);
 
-        /*lookup address of the host*/
 	memset(&ai_hints, 0, sizeof( ai_hints ) );
 	ai_hints.ai_family = AF_UNSPEC;
 	ai_hints.ai_socktype = SOCK_STREAM;
 	ai_hints.ai_protocol = IPPROTO_TCP;
         
+        /*lookup address of the host*/
 	status = getaddrinfo( request->host, port, &ai_hints, &ai_list );
 	if ( status != 0 ) {
 		goto _failed;
@@ -593,19 +573,20 @@ open_socket(struct socket_server *ss, struct request_open * request, struct sock
 		/*try to connect to the host*/
 		status = connect( sock, ai_ptr->ai_addr, ai_ptr->ai_addrlen);
 		if ( status != 0 && errno != EINPROGRESS) {
-		    /*close sock if fail*/
+		        /*close sock if fail*/
 			close(sock);
 			sock = -1;
 			continue;
 		}
-                /*EINPOTGESS !! , so we try to connect next time*/
+                /*EINPOGRESS !! , so we try to connect next time*/
 		break;
 	}
 
 	if (sock < 0) {
 		goto _failed;
 	}
-	/*get a new socket*/
+
+	/*get a new socket with tcp*/
 	ns = new_fd(ss, id, sock, PROTOCOL_TCP, request->opaque, true);
 	if (ns == NULL) {
 		close(sock);
@@ -613,6 +594,7 @@ open_socket(struct socket_server *ss, struct request_open * request, struct sock
 	}
 
 	if(status == 0) {
+	        /*open success*/
 		ns->type = SOCKET_TYPE_CONNECTED;
 		struct sockaddr * addr = ai_ptr->ai_addr;
 		void * sin_addr = (ai_ptr->ai_family == AF_INET) ? (void*)&((struct sockaddr_in *)addr)->sin_addr : (void*)&((struct sockaddr_in6 *)addr)->sin6_addr;
@@ -649,12 +631,11 @@ send_list_tcp(struct socket_server *ss, struct socket *s, struct wb_list *list, 
 			int sz = write(s->fd, tmp->ptr, tmp->sz);
 			if (sz < 0) {
 				switch(errno) {
-
 				case EINTR:
 				        /*other interupt, so we try again*/
 					continue;
 				case EAGAIN:
-				        /*nonblock write, may buffer full! so try next time*/
+				        /*nonblock write, may buffer in linux kernel full! so try next time*/
 					return -1;
 				}
 				/*error, so close socket*/
@@ -716,17 +697,19 @@ udp_socket_address(struct socket *s, const uint8_t udp_address[UDP_ADDRESS_SIZE]
  * @param[in] s socket handle
  * @param[in] list buffer wait to send
  * @param[out] result for store function return 
- *
  */
 static int
 send_list_udp(struct socket_server *ss, struct socket *s, struct wb_list *list, struct socket_message *result) {
 	while (list->head) {
 		struct write_buffer * tmp = list->head;
 		union sockaddr_all sa;
+		/*conver all udp address to normal address*/
 		socklen_t sasz = udp_socket_address(s, tmp->udp_address, &sa);
+		/*send udp packet*/
 		int err = sendto(s->fd, tmp->ptr, tmp->sz, 0, &sa.s, sasz);
 		if (err < 0) {
 			switch(errno) {
+			/*ignore all erro in udp send*/
 			case EINTR:
 			case EAGAIN:
 				return -1;
@@ -759,6 +742,7 @@ send_list_udp(struct socket_server *ss, struct socket *s, struct wb_list *list, 
  * @param[in] socket socket which buffer send  to 
  * @param[in] list buffer wait to send
  * @param[in] result result used to hold return msg
+ * @note support tcp and udp
  *
  */
 static int
@@ -775,22 +759,18 @@ send_list(struct socket_server *ss, struct socket *s, struct wb_list *list, stru
 /**
  * @brief check if there is partial in the head of write_buffer list
  * @param[in] s write buffer list
- *
  */
 static inline int
 list_uncomplete(struct wb_list *s) {
 	struct write_buffer *wb = s->head;
 	if (wb == NULL)
 		return 0;
-	
 	return (void *)wb->ptr != wb->buffer;
 }
 
 /**
  * @brief move one payload from low list to high
  * @param[s] s socket handle`
- *
- *
  */
 static void
 raise_uncomplete(struct socket * s) {
@@ -820,7 +800,7 @@ raise_uncomplete(struct socket * s) {
 static int
 send_buffer(struct socket_server *ss, struct socket *s, struct socket_message *result) {
 	assert(!list_uncomplete(&s->low));
-	// step 1
+	// step 1 
 	if (send_list(ss,s,&s->high,result) == SOCKET_CLOSE) {
 		return SOCKET_CLOSE;
 	}
@@ -849,10 +829,10 @@ send_buffer(struct socket_server *ss, struct socket *s, struct socket_message *r
 }
 
 /**
- * @brief appened new data into write buffer list
+ * @brief appened new payload into write buffer list
  * @param[in] ss socket manager
  * @param[in] s write buffer list
- * @param[in] request request msg from usr
+ * @param[in] request request send msg from usr
  * @param[in] size size of buffer wait to send
  * @param[in] n as the offset of the write_buffer
  * @return new write buffer handle
@@ -886,12 +866,12 @@ append_sendbuffer_(struct socket_server *ss, struct wb_list *s, struct request_s
  * @param[in] s socket 
  * @param[in] requesst hold the payload wait to send
  * @param[in] string address of the udp
- *
  */
 static inline void
 append_sendbuffer_udp(struct socket_server *ss, struct socket *s, int priority, struct request_send * request, const uint8_t udp_address[UDP_ADDRESS_SIZE]) {
 	struct wb_list *wl = (priority == PRIORITY_HIGH) ? &s->high : &s->low;
 	struct write_buffer *buf = append_sendbuffer_(ss, wl, request, SIZEOF_UDPBUFFER, 0);
+	/*notice!!! write_buffer could hold the dest address*/
 	memcpy(buf->udp_address, udp_address, UDP_ADDRESS_SIZE);
 	/*update the tot payload size of the write buffer*/
 	s->wb_size += buf->sz;
@@ -901,8 +881,7 @@ append_sendbuffer_udp(struct socket_server *ss, struct socket *s, int priority, 
  * @brief append new payload as a write buffer into high write buffer list
  * @param[in] ss socket manager
  * @param[in] s socket
- * @param[in] request  new payload wait to send
- *
+ * @param[in] request  hold new payload wait to send
  */
 static inline void
 append_sendbuffer(struct socket_server *ss, struct socket *s, struct request_send * request, int n) {
@@ -910,13 +889,11 @@ append_sendbuffer(struct socket_server *ss, struct socket *s, struct request_sen
 	s->wb_size += buf->sz;
 }
 
-
 /**
  * @brief append new payload as a write buffer into high write buffer list
  * @param[in] ss socket manager
  * @param[in] s socket
- * @param[in] request  new payload wait to send
- *
+ * @param[in] request  hold new payload wait to send
  */
 static inline void
 append_sendbuffer_low(struct socket_server *ss,struct socket *s, struct request_send * request) {
@@ -926,7 +903,6 @@ append_sendbuffer_low(struct socket_server *ss,struct socket *s, struct request_
 
 /**
  * @brief check if the write buffer is empty
- *
  */
 static inline int
 send_buffer_empty(struct socket *s) {
@@ -945,7 +921,9 @@ send_socket(struct socket_server *ss, struct request_send * request, struct sock
 	int id = request->id;
 	struct socket * s = &ss->slot[HASH_ID(id)];
 	struct send_object so;
+	/*convert obj to send_obj*/
 	send_object_init(ss, &so, request->buffer, request->sz);
+	/*check the status of the socket*/
 	if (s->type == SOCKET_TYPE_INVALID || s->id != id 
 		|| s->type == SOCKET_TYPE_HALFCLOSE
 		|| s->type == SOCKET_TYPE_PACCEPT) {
@@ -953,8 +931,12 @@ send_socket(struct socket_server *ss, struct request_send * request, struct sock
 		return -1;
 	}
 	assert(s->type != SOCKET_TYPE_PLISTEN && s->type != SOCKET_TYPE_LISTEN);
+
+	/*connected but write buffer empty*/
 	if (send_buffer_empty(s) && s->type == SOCKET_TYPE_CONNECTED) {
+	        /*write buffer list is empty!!! so we can try to send directly*/
 		if (s->protocol == PROTOCOL_TCP) {
+		        /*try to send directly*/
 			int n = write(s->fd, so.buffer, so.sz);
 			if (n<0) {
 				switch(errno) {
@@ -962,6 +944,7 @@ send_socket(struct socket_server *ss, struct request_send * request, struct sock
 				case EAGAIN:
 					n = 0;
 					break;
+					/*EINTR or EAGIN will try again*/
 				default:
 					fprintf(stderr, "socket-server: write to %d (fd=%d) error :%s.\n",id,s->fd,strerror(errno));
 					force_close(ss,s,result);
@@ -972,6 +955,7 @@ send_socket(struct socket_server *ss, struct request_send * request, struct sock
 				so.free_func(request->buffer);
 				return -1;
 			}
+			/*send EAGAIN or EINTR*/
 			append_sendbuffer(ss, s, request, n);	// add to high priority list, even priority == PRIORITY_LOW
 		} else {
 			// udp
@@ -988,8 +972,10 @@ send_socket(struct socket_server *ss, struct request_send * request, struct sock
 				return -1;
 			}
 		}
+		/*register write evnet again if there is payload in write buffer list*/
 		sp_write(ss->event_fd, s->fd, s, true);
 	} else {
+	        /*just put the payload into list when there is payload in the write buffer list*/
 		if (s->protocol == PROTOCOL_TCP) {
 			if (priority == PRIORITY_LOW) {
 				append_sendbuffer_low(ss, s, request);
@@ -1019,6 +1005,7 @@ listen_socket(struct socket_server *ss, struct request_listen * request, struct 
     	/*get the socket id and the listen_fd*/
         int id = request->id;
 	int listen_fd = request->fd;
+
 	/*init the socket*/
 	struct socket *s = new_fd(ss, id, listen_fd, PROTOCOL_TCP, request->opaque, false);
 	if (s == NULL) {
@@ -1037,6 +1024,13 @@ _failed:
 	return SOCKET_ERROR;
 }
 
+/**
+ * @brief close the socket by request close msg  
+ * @param[in] ss socket manager
+ * @param[in] request request close msg
+ * @param[out] result hold the result msg
+ *
+ */
 static int
 close_socket(struct socket_server *ss, struct request_close *request, struct socket_message *result) {
 	int id = request->id;
@@ -1048,29 +1042,32 @@ close_socket(struct socket_server *ss, struct request_close *request, struct soc
 		result->data = NULL;
 		return SOCKET_CLOSE;
 	}
+	/*try to clean all payload in the write buffer list*/
 	if (!send_buffer_empty(s)) { 
 		int type = send_buffer(ss,s,result);
+		/*try again, if there is payload wait to send*/
 		if (type != -1)
 			return type;
 	}
+        
+        /*close socket after all payload sended */
 	if (send_buffer_empty(s)) {
 		force_close(ss,s,result);
 		result->id = id;
 		result->opaque = request->opaque;
 		return SOCKET_CLOSE;
 	}
+	/*set as half close when close socket with payload left*/
 	s->type = SOCKET_TYPE_HALFCLOSE;
 
 	return -1;
 }
 
 /**
- * @brief bind the socket by the request bind msg from module
+ * @brief bind the socket by the request bind msg 
  * @param[in] ss socket manger
  * @param[in] request request msg for bind
  * @param[out] hold the result from bind
- *
- *
  */
 static int
 bind_socket(struct socket_server *ss, struct request_bind *request, struct socket_message *result) {
@@ -1095,24 +1092,25 @@ bind_socket(struct socket_server *ss, struct request_bind *request, struct socke
 /**
  * @brief start socket after the socket attribute init 
  * @param[in] ss socket manager
- * @param[in] request request for sstart the socket
+ * @param[in] request request for start the socket
  * @param[in] result hold the result from start socket
- * 
- *
  */
 static int
 start_socket(struct socket_server *ss, struct request_start *request, struct socket_message *result) {
 	int id = request->id;
+
 	/*build result msg*/
 	result->id = id;
 	result->opaque = request->opaque;
 	result->ud = 0;
 	result->data = NULL;
 	struct socket *s = &ss->slot[HASH_ID(id)];
+
 	/*check the socket wait to start*/
 	if (s->type == SOCKET_TYPE_INVALID || s->id !=id) {
 		return SOCKET_ERROR;
 	}
+
 	/*start socket by register the read event if the type in (PACCEPT PLISTEN)*/
 	if (s->type == SOCKET_TYPE_PACCEPT || s->type == SOCKET_TYPE_PLISTEN) {
 	        /*register the read evet*/
@@ -1137,7 +1135,7 @@ start_socket(struct socket_server *ss, struct request_start *request, struct soc
 /**
  * @brief set opt for the socket
  * @param[in] ss socket manager
- * @param[in] request_setopt msg used to set socket
+ * @param[in] request request setopt msg used to set socket
  *
  */
 static void
@@ -1180,7 +1178,6 @@ block_readpipe(int pipefd, void *buffer, int sz) {
 /**
  * @brief wait request msg from usr and slove this msg
  * @param[ss] socket manager
- *
  */
 static int
 has_cmd(struct socket_server *ss) {
@@ -1198,8 +1195,8 @@ has_cmd(struct socket_server *ss) {
 	return 0;
 }
 
-/**
- * @brief add udp socket for request msg from module 
+/** 
+ * @brief init udp socket for request msg from module 
  * @param[in] ss socket manager
  * @param[in] udp request msg for alloc udp socket in socket manager 
  *
@@ -1228,7 +1225,7 @@ add_udp_socket(struct socket_server *ss, struct request_udp *udp) {
 }
 
 /**
- *  @brief set the udp address for tht udp socket
+ *  @brief set the udp address for the udp socket
  *  @param[in] ss socket manager
  *  @param[in] request request for set address for uddp socket
  *  @param[out] result hold the resuld for this action
@@ -1260,10 +1257,9 @@ set_udp_address(struct socket_server *ss, struct request_setudp *request, struct
 
 // return type
 /**
- * @brief socket manager process by the result message from the usr by pipe
- * @param[in] socket manager
+ * @brief deal with the ctrl msg
+ * @param[in] sssocket manager
  * @param[in] result result msg from the usr
- *
  */
 static int
 ctrl_cmd(struct socket_server *ss, struct socket_message *result) {
@@ -1271,52 +1267,57 @@ ctrl_cmd(struct socket_server *ss, struct socket_message *result) {
 	// the length of message is one byte, so 256+8 buffer size is enough.
 	uint8_t buffer[256];
 	uint8_t header[2];
+	/*TODO select pipe, why use select???*/
 	block_readpipe(fd, header, sizeof(header));
 	int type = header[0];
 	int len = header[1];
+	/*read ctrl msg*/
 	block_readpipe(fd, buffer, len);
+
 	// ctrl command only exist in local fd, so don't worry about endian.
 	switch (type) {
 	case 'S':
+	        // Start socket
 		return start_socket(ss,(struct request_start *)buffer, result);
 	case 'B':
-	        /*tcp*/
+	        //Bind socket
 		return bind_socket(ss,(struct request_bind *)buffer, result);
 	case 'L':
-	        /*tcp*/
+	        //Listen socket
 		return listen_socket(ss,(struct request_listen *)buffer, result);
 	case 'K':
+	        //Close socket
 		return close_socket(ss,(struct request_close *)buffer, result);
 	case 'O':
-	        /*tcp*/
+	        //Connect to (Open)
 		return open_socket(ss, (struct request_open *)buffer, result);
 	case 'X':
-	        /*exit*/
+	        //Exit
 		result->opaque = 0;
 		result->id = 0;
 		result->ud = 0;
 		result->data = NULL;
 		return SOCKET_EXIT;
 	case 'D':
-	        /*tcp*/
+	        //Send package (high)
 		return send_socket(ss, (struct request_send *)buffer, result, PRIORITY_HIGH, NULL);
 	case 'P':
-	        /*tcp*/
+	        //Send package (low)
 		return send_socket(ss, (struct request_send *)buffer, result, PRIORITY_LOW, NULL);
 	case 'A': {
-	        /*udp*/
+	        //A Send UDP package
 		struct request_send_udp * rsu = (struct request_send_udp *)buffer;
 		return send_socket(ss, &rsu->send, result, PRIORITY_HIGH, rsu->address);
 	}
 	case 'C':
-	        /*udp*/
+	        //set udp address
 		return set_udp_address(ss, (struct request_setudp *)buffer, result);
 	case 'T':
-	        /*tcp or udp*/
+	        //Set opt
 		setopt_socket(ss, (struct request_setopt *)buffer);
 		return -1;
 	case 'U':
-	        /*udp*/
+	        //Create UDP socket
 		add_udp_socket(ss, (struct request_udp *)buffer);
 		return -1;
 	default:
@@ -1328,9 +1329,16 @@ ctrl_cmd(struct socket_server *ss, struct socket_message *result) {
 }
 
 // return -1 (ignore) when error
+/**
+ * @brief recive tcp payload from socket
+ * @param[in] ss socket manager
+ * @param[in] s socket 
+ * @param[in] result hold the return msg
+ */
 static int
 forward_message_tcp(struct socket_server *ss, struct socket *s, struct socket_message * result) {
-	int sz = s->p.size;
+    	/*try to read from the fd*/
+        int sz = s->p.size;
 	char * buffer = MALLOC(sz);
 	int n = (int)read(s->fd, buffer, sz);
 	if (n<0) {
@@ -1353,22 +1361,23 @@ forward_message_tcp(struct socket_server *ss, struct socket *s, struct socket_me
 		force_close(ss, s, result);
 		return SOCKET_CLOSE;
 	}
-
+        
 	if (s->type == SOCKET_TYPE_HALFCLOSE) {
 		// discard recv data
 		FREE(buffer);
 		return -1;
 	}
 
-	//expand or contract the read buffer by the buffer read this time
+	//expand or contract the read buffer by the payload read this time
 
 	if (n == sz) {
 		s->p.size *= 2;
 	} else if (sz > MIN_READ_BUFFER && n*2 < sz) {
-	        /*TODO here ma error*/
+	        /*TODO here maybe error*/
 		s->p.size /= 2;
 	}
-
+        
+        /*tcp payload as the result msg*/
 	result->opaque = s->opaque;
 	result->id = s->id;
 	result->ud = n;
@@ -1379,11 +1388,8 @@ forward_message_tcp(struct socket_server *ss, struct socket *s, struct socket_me
 /**
  * @brief convert the ipv4 or ipv6 to the public address
  * @param[in] protocol protol of the adderess
- * @param[in] udp_address udp address handle address
  * @param[in] sa the public storage of the udp address
- * @param[in] udp_address the udp address wait to convert 
- * 
- *
+ * @param[in] udp_address the udp address wait to be converted
  */
 static int
 gen_udp_address(int protocol, union sockaddr_all *sa, uint8_t * udp_address) {
@@ -1404,10 +1410,17 @@ gen_udp_address(int protocol, union sockaddr_all *sa, uint8_t * udp_address) {
 	return addrsz;
 }
 
+/**
+ * @brief recive udp payload from socket
+ * @param[in] ss socket manager
+ * @param[in] s socket 
+ * @param[in] result hold the return msg
+ */
 static int
 forward_message_udp(struct socket_server *ss, struct socket *s, struct socket_message * result) {
 	union sockaddr_all sa;
 	socklen_t slen = sizeof(sa);
+	/*try to recive udp packet with size 65535*/
 	int n = recvfrom(s->fd, ss->udpbuffer,MAX_UDP_PACKAGE,0,&sa.s,&slen);
 	if (n<0) {
 		switch(errno) {
@@ -1434,10 +1447,11 @@ forward_message_udp(struct socket_server *ss, struct socket *s, struct socket_me
 		gen_udp_address(PROTOCOL_UDPv6, &sa, data + n);
 	}
 	memcpy(data, ss->udpbuffer, n);
-
+        
+        /*udp payload as the result msg*/
 	result->opaque = s->opaque;
 	result->id = s->id;
-	result->ud = n;
+	result->ud = n;                 /*ud is the payload size of the udp*/
 	result->data = (char *)data;
 
 	return SOCKET_UDP;
@@ -1486,29 +1500,33 @@ report_connect(struct socket_server *ss, struct socket *s, struct socket_message
 }
 
 // return 0 when failed
+//
 /**
  * @brief accpect one connect from user and build the socket msg 
  * @param[in] ss master of all socket 
  * @param[in] s  socket accept connect
- * @param[out] result msg wait to build
+ * @param[out]  result msg wait to build
  * @return get new clinet fail ? 0 : 1
  *
  */
 static int
 report_accept(struct socket_server *ss, struct socket *s, struct socket_message *result) {
 	union sockaddr_all u;
+
 	/*accpet usr and try to get fd*/
 	socklen_t len = sizeof(u);
 	int client_fd = accept(s->fd, &u.s, &len);
 	if (client_fd < 0) {
 		return 0;
 	}
+
 	/*get id for this client*/
 	int id = reserve_id(ss);
 	if (id < 0) {
 		close(client_fd);
 		return 0;
 	}
+
 	/*install  keepalive timer*/
 	socket_keepalive(client_fd);
 	/*set the clinet as nonblock*/
@@ -1519,12 +1537,13 @@ report_accept(struct socket_server *ss, struct socket *s, struct socket_message 
 		close(client_fd);
 		return 0;
 	}
-	/*change type to opaque*/
+
+	/*change type to PACCEPT*/
 	ns->type = SOCKET_TYPE_PACCEPT;
 	/*store the attributes into the result*/
-	result->opaque = s->opaque;
-	result->id = s->id;  /*listen socket id*/
-	result->ud = id;     /*client socket id*/
+	result->opaque = s->opaque; /*store the module id listen fd belong to*/
+	result->id = s->id;         /*listen socket id*/
+	result->ud = id;            /*client socket id*/
 	result->data = NULL;
         
         /*store the address in string*/
@@ -1544,7 +1563,6 @@ report_accept(struct socket_server *ss, struct socket *s, struct socket_message 
  * @param[in] ss socket manager
  * @param[in] result socket wait to delete
  * @param[in] type action type
- *
  */
 static inline void 
 clear_closed_event(struct socket_server *ss, struct socket_message * result, int type) {
@@ -1567,8 +1585,8 @@ clear_closed_event(struct socket_server *ss, struct socket_message * result, int
 // return type
 /**
  * @brief wait event by epoll
- * @param[in] ss manager of all sockets
- * @param[out] result get socket message
+ * @param[in] ss manager of all socket
+ * @param[out] result hold result msg
  * @param[out] more set as 0  when read or write evnet occured
  * @return type
  *
@@ -1576,7 +1594,7 @@ clear_closed_event(struct socket_server *ss, struct socket_message * result, int
 int 
 socket_server_poll(struct socket_server *ss, struct socket_message * result, int * more) {
 	for (;;) {
-	        //1. try to get the ctrl get from modules by pipe
+	        //1. try to get the ctrl msg from modules by pipe
 		if (ss->checkctrl) {
 		        /*try to get msg from pipe*/
 			if (has_cmd(ss)) {
@@ -1593,7 +1611,7 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 				ss->checkctrl = 0;
 			}
 		}
-		//2.get the read or write event  and mark the event
+		//2.try to get more event if all the event occured solved
 		if (ss->event_index == ss->event_n) {
 		        /*wait event occured and record what occured*/
 			ss->event_n = sp_wait(ss->event_fd, ss->ev, MAX_EVENT);
@@ -1607,20 +1625,20 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 				return -1;
 			}
 		}
-		/*3.get one evnet*/
+		/*3.try to solve one evnet*/
 		struct event *e = &ss->ev[ss->event_index++];
 		struct socket *s = e->s;
 		if (s == NULL) {
 			// dispatch pipe message at beginning
 			continue;
 		}
-		//do action for the evnet 
+		//do action for the event's result msg
 		switch (s->type) {
 		case SOCKET_TYPE_CONNECTING:
-		        /*connect to others success*/
+		        /*report to module that connect to others success*/
 			return report_connect(ss, s, result);
 		case SOCKET_TYPE_LISTEN:
-		        /*get new connect from user success*/
+		        /*report to module that new connect accept*/
 			if (report_accept(ss, s, result)) {
 				return SOCKET_ACCEPT;
 			} 
@@ -1629,7 +1647,7 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 			fprintf(stderr, "socket-server: invalid socket\n");
 			break;
 		default:
-		        /*read msg from  from socket*/
+		        /*read msg from  from socket if read event occured*/
 			if (e->read) {
 				int type;
 				if (s->protocol == PROTOCOL_TCP) {
@@ -1654,7 +1672,7 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 				clear_closed_event(ss, result, type);
 				return type;
 			}
-			/*write data into others when write event cccured*/
+			/*write payload after write event occured*/
 			if (e->write) {
 				int type = send_buffer(ss, s, result);
 				if (type == -1)
@@ -1694,11 +1712,10 @@ send_request(struct socket_server *ss, struct request_package *request, char typ
 /**
  * @brief build the open request msg
  * @param[in] ss socket manager
- * @param[in] req the msg want to build
- * @param[in] opaque the id of the socket to open
+ * @param[out] req the msg want to build
+ * @param[in] opaque the id of the module produce this msg
  * @param[in] addr address string of the connect machine
- * @param[in] port of the connect machine
- *
+ * @param[in] port port of the connect machine
  */
 static int
 open_request(struct socket_server *ss, struct request_package *req, uintptr_t opaque, const char *addr, int port) {
@@ -1721,11 +1738,11 @@ open_request(struct socket_server *ss, struct request_package *req, uintptr_t op
 }
 
 /**
- * @brief build request msg and send to socket manager thread
- * @param[in] socket_server socket manager
- * @param[in] opaque id of the module
+ * @brief build request connect msg and send to socket manager thread
+ * @param[in] ss ssocket manager
+ * @param[in] opaque id of the module this msg from
  * @param[in] addr address string of the connect machine
- * @param[in] port of the connect machine
+ * @param[in] port port of the connect machine
  */
 int 
 socket_server_connect(struct socket_server *ss, uintptr_t opaque, const char * addr, int port) {
