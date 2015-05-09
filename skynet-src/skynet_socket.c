@@ -44,10 +44,10 @@ skynet_socket_free() {
 
 // mainloop thread
 /**
- * @brief send the event to the usr module 
+ * @brief forward the msg to the usr module 
  * @param[in] type what happened 
  * @param[in] padding exist data in result->data
- * @param[in] result result msg want to send 
+ * @param[in] result result msg wait to send 
  */
 static void
 forward_message(int type, bool padding, struct socket_message * result) {
@@ -61,8 +61,8 @@ forward_message(int type, bool padding, struct socket_message * result) {
 		}
 	}
 	sm = (struct skynet_socket_message *)skynet_malloc(sz);
-	sm->type = type;
-	sm->id = result->id;
+	sm->type = type;            //msg type
+	sm->id = result->id;        //
 	sm->ud = result->ud;
 	if (padding) {
 		sm->buffer = NULL;
@@ -75,8 +75,10 @@ forward_message(int type, bool padding, struct socket_message * result) {
 	message.source = 0;
 	message.session = 0;
 	message.data = sm;
+	/*node id in high 8bits*/
 	message.sz = sz | PTYPE_SOCKET << HANDLE_REMOTE_SHIFT;
 	
+	//push the msg into queue to the module
 	if (skynet_context_push((uint32_t)result->opaque, &message)) {
 		// todo: report somewhere to close socket
 		// don't call skynet_socket_close here (It will block mainloop)
@@ -88,7 +90,7 @@ forward_message(int type, bool padding, struct socket_message * result) {
 /**
  * @brief as door of this server, accept client, 
  *  get client msg forward it to module, wirte msg to client
- * @return close socket manager ? -1 : 1
+ * @return close socket manager ? <= 0 : 1
  */
 int 
 skynet_socket_poll() {
@@ -97,28 +99,28 @@ skynet_socket_poll() {
 	/*result used to hold return msg from the socket_server_poll*/
 	struct socket_message result;
 	int more = 1;
-	/*wait evnet occured*/
+	/*wait evnet occured, and solve the event with the result info return */
 	int type = socket_server_poll(ss, &result, &more);
-	/*process message get from poll*/
+	/*forward the result msg recive from event*/
 	switch (type) {
-	case SOCKET_EXIT:
+	case SOCKET_EXIT:   /*close the socket manager*/
 		return 0;
-	case SOCKET_DATA:
+	case SOCKET_DATA:   /*forward payload recive from tcp*/
 		forward_message(SKYNET_SOCKET_TYPE_DATA, false, &result);
 		break;
-	case SOCKET_CLOSE:
+	case SOCKET_CLOSE:  /*forward socket close notice*/
 		forward_message(SKYNET_SOCKET_TYPE_CLOSE, false, &result);
 		break;
-	case SOCKET_OPEN:
+	case SOCKET_OPEN:   /*forward socket open info*/
 		forward_message(SKYNET_SOCKET_TYPE_CONNECT, true, &result);
 		break;
-	case SOCKET_ERROR:
+	case SOCKET_ERROR: /*forward socket error ifo*/
 		forward_message(SKYNET_SOCKET_TYPE_ERROR, false, &result);
 		break;
-	case SOCKET_ACCEPT:
+	case SOCKET_ACCEPT:/*forward socket accept msg*/
 		forward_message(SKYNET_SOCKET_TYPE_ACCEPT, true, &result);
 		break;
-	case SOCKET_UDP:
+	case SOCKET_UDP:  /*forward payload recive from udp*/
 		forward_message(SKYNET_SOCKET_TYPE_UDP, false, &result);
 		break;
 	default:
@@ -131,6 +133,8 @@ skynet_socket_poll() {
 	}
 	return 1;
 }
+
+
 
 static int
 check_wsz(struct skynet_context *ctx, int id, void *buffer, int64_t wsz) {
