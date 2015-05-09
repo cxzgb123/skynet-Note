@@ -28,7 +28,7 @@
 #define SOCKET_TYPE_CONNECTED 5     /*skynet connect to others success*/
 #define SOCKET_TYPE_HALFCLOSE 6     /*half close, so we can trans more data*/
 #define SOCKET_TYPE_PACCEPT 7       /*others connect to skynet success*/
-#define SOCKET_TYPE_BIND 8
+#define SOCKET_TYPE_BIND 8          /*bind the address*/
 
 #define MAX_SOCKET (1<<MAX_SOCKET_P)
 
@@ -79,14 +79,14 @@ struct wb_list {
  *
  */
 struct socket {
-	uintptr_t opaque;
-	struct wb_list high;
-	struct wb_list low;
-	int64_t wb_size;
+	uintptr_t opaque;   /*id of the socket*/
+	struct wb_list high;/*high rate write buffer list*/    
+	struct wb_list low; /*low  rate write buffer list*/
+	int64_t wb_size;    /*size of the payload wait to send*/
 	int fd;             /*socket fd*/
 	int id;             /*id alloc for this socket*/ 
 	uint16_t protocol;  /*link protocol*/
-	uint16_t type;
+	uint16_t type;      /*status of the socket*/
 	union {
 		int size;
 		uint8_t udp_address[UDP_ADDRESS_SIZE]; /*udp address of the udp socket*/
@@ -1267,9 +1267,12 @@ forward_message_tcp(struct socket_server *ss, struct socket *s, struct socket_me
 		return -1;
 	}
 
+	//expand or contract the read buffer by the buffer read this time
+
 	if (n == sz) {
 		s->p.size *= 2;
 	} else if (sz > MIN_READ_BUFFER && n*2 < sz) {
+	        /*TODO here ma error*/
 		s->p.size /= 2;
 	}
 
@@ -1280,10 +1283,20 @@ forward_message_tcp(struct socket_server *ss, struct socket *s, struct socket_me
 	return SOCKET_DATA;
 }
 
+/**
+ * @brief convert the ipv4 or ipv6 to the public address
+ * @param[in] protocol protol of the adderess
+ * @param[in] udp_address udp address handle address
+ * @param[in] sa the public storage of the udp address
+ * @param[in] udp_address the udp address wait to convert 
+ * 
+ *
+ */
 static int
 gen_udp_address(int protocol, union sockaddr_all *sa, uint8_t * udp_address) {
 	int addrsz = 1;
 	udp_address[0] = (uint8_t)protocol;
+	/*convert by the protocl */
 	if (protocol == PROTOCOL_UDP) {
 		memcpy(udp_address+addrsz, &sa->v4.sin_port, sizeof(sa->v4.sin_port));
 		addrsz += sizeof(sa->v4.sin_port);
@@ -1470,11 +1483,11 @@ clear_closed_event(struct socket_server *ss, struct socket_message * result, int
 int 
 socket_server_poll(struct socket_server *ss, struct socket_message * result, int * more) {
 	for (;;) {
-	        /*we need get info from pipe if check ctrl*/
+	        //1. try to get the ctrl get from modules by pipe
 		if (ss->checkctrl) {
 		        /*try to get msg from pipe*/
 			if (has_cmd(ss)) {
-                                /*get request msg from the pipe*/
+                                /*run ctrl msg and get the result*/
 				int type = ctrl_cmd(ss, result);
 				if (type != -1) {
 				        /*fail, so we clear the event*/
@@ -1487,6 +1500,7 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 				ss->checkctrl = 0;
 			}
 		}
+		//2.get the read or write event  and mark the event
 		if (ss->event_index == ss->event_n) {
 		        /*wait event occured and record what occured*/
 			ss->event_n = sp_wait(ss->event_fd, ss->ev, MAX_EVENT);
@@ -1500,13 +1514,14 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 				return -1;
 			}
 		}
-		/*get one event*/
+		/*3.get one evnet*/
 		struct event *e = &ss->ev[ss->event_index++];
 		struct socket *s = e->s;
 		if (s == NULL) {
 			// dispatch pipe message at beginning
 			continue;
 		}
+		//do action for the evnet 
 		switch (s->type) {
 		case SOCKET_TYPE_CONNECTING:
 		        /*connect to others success*/
@@ -1827,7 +1842,7 @@ socket_server_udp(struct socket_server *ss, uintptr_t opaque, const char * addr,
 		return -1;
 	}
 	struct request_package request;
-	request.u.udp.id = id;
+	request.u.udp.id = id;              
 	request.u.udp.fd = fd;
 	request.u.udp.opaque = opaque;
 	request.u.udp.family = family;
@@ -1836,6 +1851,15 @@ socket_server_udp(struct socket_server *ss, uintptr_t opaque, const char * addr,
 	return id;
 }
 
+/**
+ * @breif transe udp msg to socket thread by pipe
+ * @param[in] ss socket manager
+ * @param[ib] id id of hte socket
+ * @param[in] addr address of the udp 
+ * @param[in] buffer pyload of the udp msg
+ * @param[in] sz size of the payload in udp msg
+ *return  payload size of the socket wait to send
+ */
 int64_t 
 socket_server_udp_send(struct socket_server *ss, int id, const struct socket_udp_address *addr, const void *buffer, int sz) {
 	struct socket * s = &ss->slot[HASH_ID(id)];
@@ -1862,13 +1886,20 @@ socket_server_udp_send(struct socket_server *ss, int id, const struct socket_udp
 	}
 
 	memcpy(request.u.send_udp.address, udp_address, addrsz);	
-
+        
+        //trans udp data to socket thread here ( size = payload + udp address size)
 	send_request(ss, &request, 'A', sizeof(request.u.send_udp.send)+addrsz);
 	return s->wb_size;
 }
 
-//
-
+/**
+ * @brief send connect request msg to the socket thread
+ * @param[in] ss socket manager handle
+ * @param[in] id id of the socket
+ * @param[in] addr address  of the udp
+ * @param[in] port port of the udp
+ *
+ */
 int
 socket_server_udp_connect(struct socket_server *ss, int id, const char * addr, int port) {
 	int status;
@@ -1876,11 +1907,12 @@ socket_server_udp_connect(struct socket_server *ss, int id, const char * addr, i
 	struct addrinfo *ai_list = NULL;
 	char portstr[16];
 	sprintf(portstr, "%d", port);
+	/*get the udp daddress */
 	memset( &ai_hints, 0, sizeof( ai_hints ) );
 	ai_hints.ai_family = AF_UNSPEC;
 	ai_hints.ai_socktype = SOCK_DGRAM;
 	ai_hints.ai_protocol = IPPROTO_UDP;
-
+    
 	status = getaddrinfo(addr, portstr, &ai_hints, &ai_list );
 	if ( status != 0 ) {
 		return -1;
@@ -1897,10 +1929,12 @@ socket_server_udp_connect(struct socket_server *ss, int id, const char * addr, i
 		freeaddrinfo( ai_list );
 		return -1;
 	}
-
+        //get the public udp address
 	int addrsz = gen_udp_address(protocol, (union sockaddr_all *)ai_list->ai_addr, request.u.set_udp.address);
 
 	freeaddrinfo( ai_list );
+
+	/*sed the connect request msg to the socket thread*/
 
 	send_request(ss, &request, 'C', sizeof(request.u.set_udp) - sizeof(request.u.set_udp.address) +addrsz);
 
