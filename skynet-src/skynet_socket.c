@@ -114,7 +114,7 @@ skynet_socket_poll() {
 	case SOCKET_OPEN:   /*forward socket open info*/
 		forward_message(SKYNET_SOCKET_TYPE_CONNECT, true, &result);
 		break;
-	case SOCKET_ERROR: /*forward socket error ifo*/
+	case SOCKET_ERROR: /*forward socket error info*/
 		forward_message(SKYNET_SOCKET_TYPE_ERROR, false, &result);
 		break;
 	case SOCKET_ACCEPT:/*forward socket accept msg*/
