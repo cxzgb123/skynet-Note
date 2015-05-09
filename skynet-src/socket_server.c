@@ -704,8 +704,7 @@ udp_socket_address(struct socket *s, const uint8_t udp_address[UDP_ADDRESS_SIZE]
 		memset(&sa->v6, 0, sizeof(sa->v6));
 		sa->s.sa_family = AF_INET6;
 		sa->v6.sin6_port = port;
-		memcpy(&sa->v6.sin6_addr, udp_address + 1 + sizeof(uint16_t), sizeof(sa->v6.sin6_addr));	// ipv4 address is 128 bits
-		                                                                                                    /*ipv6 address is 128 bit*/
+		memcpy(&sa->v6.sin6_addr, udp_address + 1 + sizeof(uint16_t), sizeof(sa->v6.sin6_addr)); // ipv6 address is 128 bits
 		return sizeof(sa->v6);
 	}
 	return 0;
@@ -986,6 +985,7 @@ send_socket(struct socket_server *ss, struct request_send * request, struct sock
 				append_sendbuffer_udp(ss,s,priority,request,udp_address);
 			} else {
 				so.free_func(request->buffer);
+				return -1;
 			}
 		}
 		sp_write(ss->event_fd, s->fd, s, true);
@@ -1220,6 +1220,7 @@ add_udp_socket(struct socket_server *ss, struct request_udp *udp) {
 	if (ns == NULL) {
 		close(udp->fd);
 		ss->slot[HASH_ID(id)].type = SOCKET_TYPE_INVALID;
+		return;
 	}
 	/*!!!here, marked as connected directly*/
 	ns->type = SOCKET_TYPE_CONNECTED;
