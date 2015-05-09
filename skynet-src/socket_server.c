@@ -1758,6 +1758,12 @@ socket_server_connect(struct socket_server *ss, uintptr_t opaque, const char * a
 
 // return -1 when error
 //
+//
+/**
+ *
+ *
+ *
+ */
 int64_t 
 socket_server_send(struct socket_server *ss, int id, const void * buffer, int sz) {
 	struct socket * s = &ss->slot[HASH_ID(id)];
@@ -1861,10 +1867,10 @@ _failed_fd:
 
 /**
  * @brief listen socket
- * 
- *
+ * @param[in] host host limit
+ * @param[in] port port to listen
+ * @param[in] backlog limit of the listen
  */
-
 static int
 do_listen(const char * host, int port, int backlog) {
 	int family = 0;
@@ -1879,6 +1885,14 @@ do_listen(const char * host, int port, int backlog) {
 	return listen_fd;
 }
 
+/**
+ * @brief build and send socket listen request to socket thread
+ * @param[in] ss socket manager
+ * @param[in] opaque module id the msg from 
+ * @param[in] addr address string
+ * @param[in] port port
+ * @param[in] backlog listen limit
+ */
 int 
 socket_server_listen(struct socket_server *ss, uintptr_t opaque, const char * addr, int port, int backlog) {
 	int fd = do_listen(addr, port, backlog);
@@ -1898,6 +1912,12 @@ socket_server_listen(struct socket_server *ss, uintptr_t opaque, const char * ad
 	return id;
 }
 
+/**
+ * @brief build and send socket bind request to socket thread
+ * @param[in] ss socket manager
+ * @param[in] opaque module id the msg from 
+ * @param[in] fd of the socket wait to bind
+ */
 int
 socket_server_bind(struct socket_server *ss, uintptr_t opaque, int fd) {
 	struct request_package request;
@@ -1911,6 +1931,12 @@ socket_server_bind(struct socket_server *ss, uintptr_t opaque, int fd) {
 	return id;
 }
 
+/**
+ * @brief build and send socket start request to socket thread
+ * @param[in] ss socket manager
+ * @param[in] opaque module id the msg from 
+ * @param[in] id id of the socket
+ */
 void 
 socket_server_start(struct socket_server *ss, uintptr_t opaque, int id) {
 	struct request_package request;
@@ -1919,6 +1945,11 @@ socket_server_start(struct socket_server *ss, uintptr_t opaque, int id) {
 	send_request(ss, &request, 'S', sizeof(request.u.start));
 }
 
+/**
+ * @brief build and send nodely request to socket thread
+ * @param[in] ss socket manager
+ * @param[in] id id of the socket
+ */
 void
 socket_server_nodelay(struct socket_server *ss, int id) {
 	struct request_package request;
@@ -1928,6 +1959,11 @@ socket_server_nodelay(struct socket_server *ss, int id) {
 	send_request(ss, &request, 'T', sizeof(request.u.setopt));
 }
 
+/**
+ * @brief register the mem handle for payload
+ * @param[in]ss socket manager
+ * @param[in]soi mem handle for payload
+ */
 void 
 socket_server_userobject(struct socket_server *ss, struct socket_object_interface *soi) {
 	ss->soi = *soi;
@@ -1935,12 +1971,10 @@ socket_server_userobject(struct socket_server *ss, struct socket_object_interfac
 
 // UDP
 /**
- * @brief try to send request msg to socket manager to init a udp socket
+ * @brief send request msg to socket thread to init a udp socket
  * @param[in] opaque module id
  * @param[in] addr string of address 
  * @param[in] port port of the udp socket
- *
- *
  */
 int 
 socket_server_udp(struct socket_server *ss, uintptr_t opaque, const char * addr, int port) {
@@ -1981,7 +2015,7 @@ socket_server_udp(struct socket_server *ss, uintptr_t opaque, const char * addr,
 }
 
 /**
- * @breif transe udp msg to socket thread by pipe
+ * @breif send  udp wait to send to socket thread by pipe
  * @param[in] ss socket manager
  * @param[ib] id id of hte socket
  * @param[in] addr address of the udp 
@@ -2027,7 +2061,6 @@ socket_server_udp_send(struct socket_server *ss, int id, const struct socket_udp
  * @param[in] id id of the socket
  * @param[in] addr address  of the udp
  * @param[in] port port of the udp
- *
  */
 int
 socket_server_udp_connect(struct socket_server *ss, int id, const char * addr, int port) {
@@ -2036,6 +2069,7 @@ socket_server_udp_connect(struct socket_server *ss, int id, const char * addr, i
 	struct addrinfo *ai_list = NULL;
 	char portstr[16];
 	sprintf(portstr, "%d", port);
+
 	/*get the udp daddress */
 	memset( &ai_hints, 0, sizeof( ai_hints ) );
 	ai_hints.ai_family = AF_UNSPEC;
@@ -2071,7 +2105,7 @@ socket_server_udp_connect(struct socket_server *ss, int id, const char * addr, i
 }
 
 /**
- * @brief get the address and size of the socket_message address
+ * @brief get the udp address and size from socket_message 
  * @param[in] ss manager all socket 
  * @param[in] msg socket msg
  * @param[out] addrsz get the size of the udp address
