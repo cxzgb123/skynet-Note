@@ -447,6 +447,11 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 	return q;
 }
 
+/**
+ * @brief copy string from addr to name
+ * @param[out] name storage as dst
+ * @param[in]  addr string from
+ */
 static void
 copy_name(char name[GLOBALNAME_LENGTH], const char * addr) {
 	int i;
@@ -458,18 +463,32 @@ copy_name(char name[GLOBALNAME_LENGTH], const char * addr) {
 	}
 }
 
+/**
+ * @brief try to find the module by name
+ * @param[in] context handle of the module
+ * @param[in] name module name
+ *
+ */
 uint32_t 
 skynet_queryname(struct skynet_context * context, const char * name) {
 	switch(name[0]) {
 	case ':':
+	        /* ': module id' support*/
 		return strtoul(name+1,NULL,16);
 	case '.':
+                /* '. module name' support*/
 		return skynet_handle_findname(name + 1);
 	}
 	skynet_error(context, "Don't support query global name %s",name);
 	return 0;
 }
 
+/**
+ * @brief the module exit
+ * @param[in] context handle of hte module
+ * @param[in] handle id of the module
+ *
+ */
 static void
 handle_exit(struct skynet_context * context, uint32_t handle) {
 	if (handle == 0) {
@@ -479,8 +498,10 @@ handle_exit(struct skynet_context * context, uint32_t handle) {
 		skynet_error(context, "KILL :%0x", handle);
 	}
 	if (G_NODE.monitor_exit) {
+	        /*report*/
 		skynet_send(context,  handle, G_NODE.monitor_exit, PTYPE_CLIENT, 0, NULL, 0);
 	}
+	/*unregister*/
 	skynet_handle_retire(handle);
 }
 
