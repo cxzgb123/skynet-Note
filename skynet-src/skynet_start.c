@@ -16,22 +16,35 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * @brief monitor manager
+ *
+ */
 struct monitor {
-	int count;                        /*监视器数量*/
-	struct skynet_monitor ** m;       /*存放各个真线程使用的moniter*/
-	pthread_cond_t cond;              /*条件锁*/ 
-	pthread_mutex_t mutex;            /*互斥锁*/
-	int sleep;
+	int count;                        /*tot nums of moniter*/
+	struct skynet_monitor ** m;       /*storage of monitor*/
+	pthread_cond_t cond;              /*condition lock*/ 
+	pthread_mutex_t mutex;            /*mutex lock*/
+	int sleep;                        /*record thread drop into sleep*/
 };
 
+/**
+ * @brief warp of monitor
+ */
 struct worker_parm {
-	struct monitor *m;       
-	int id;
-	int weight;
+	struct monitor *m;               /*montior hhandle*/       
+	int id;                          /*id of this module*/
+	int weight;                      /*weight of queue of this module*/
 };
 
 #define CHECK_ABORT if (skynet_context_total()==0) break;
 
+/**
+ * @brief start a thread
+ * @param[in] thread thread handle
+ * @param[in] callback for thread
+ * @param[in] arg param for the thread
+ */
 static void
 create_thread(pthread_t *thread, void *(*start_routine) (void *), void *arg) {
 	if (pthread_create(thread,NULL, start_routine, arg)) {
@@ -41,8 +54,8 @@ create_thread(pthread_t *thread, void *(*start_routine) (void *), void *arg) {
 }
 
 /**
- * @brief 尝试唤醒单个线程
- * @param[in] m 全局监视器
+ * @brief try to wake up one thread
+ * @param[in] m monitor manager
  * @param[in] busy 
  *
  */
@@ -55,8 +68,7 @@ wakeup(struct monitor *m, int busy) {
 }
 
 /**
- * @brief socket 
- * @param[in] it run as a module in one thread
+ * @brief socket thread 
  * @param[in] p monitor of this module
  */
 static void *
@@ -64,6 +76,7 @@ _socket(void *p) {
 	struct monitor * m = p;
 	skynet_initthread(THREAD_SOCKET);
 	for (;;) {
+	        /*deal with the event*/
 		int r = skynet_socket_poll();
 		if (r==0)
 			break;
@@ -72,12 +85,16 @@ _socket(void *p) {
 			continue;
 		}
 		/*wakeup one when sleep thread bigger than montior*/
-		/*so, thread can process the msg from socket to other module*/
 		wakeup(m,0);
 	}
 	return NULL;
 }
 
+/**
+ * @brief release the monitor manager
+ * @param[in] m monitor manager
+ *
+ */
 static void
 free_monitor(struct monitor *m) {
 	int i;
