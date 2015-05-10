@@ -48,16 +48,16 @@ struct skynet_context {
 	FILE * logfile;                 /*logfile*/
 	char result[32];
 	uint32_t handle;                /*module id for this queue*/  
-	int session_id;         
+	int session_id;                 /*curr session id*/
 	int ref;                        /*ref for this module*/
-	bool init;
+	bool init;                      /*flag if the handle init finished*/
 	bool endless;
 
 	CHECKCALLING_DECL
 };
 
 struct skynet_node {
-	int total;
+	int total;                          
 	int init;
 	uint32_t monitor_exit;
 	pthread_key_t handle_key;       /*shared data in the thread*/   
@@ -65,13 +65,16 @@ struct skynet_node {
 
 static struct skynet_node G_NODE;
 
+/**
+ * @brief tot 
+ */
 int 
 skynet_context_total() {
 	return G_NODE.total;
 }
 
 /**
- * @brief atom add
+ * @brief atom add tot 
  */
 static void
 context_inc() {
@@ -79,8 +82,7 @@ context_inc() {
 }
 
 /**
- * @brief atod dec
- *
+ * @brief atod dec tot 
  */
 static void
 context_dec() {
@@ -120,12 +122,16 @@ id_to_hex(char * str, uint32_t id) {
 
 /**
  * @brief hold the module id when drop message
- *
  */
 struct drop_t {
 	uint32_t handle;    /*id of the module*/
 };
 
+/**
+ * @brief drop msg
+ * @param[in] msg msg wait to drop
+ * @param[in] ud the module id this msg belong to
+ */
 static void
 drop_message(struct skynet_message *msg, void *ud) {
 	struct drop_t *d = ud;
@@ -137,39 +143,35 @@ drop_message(struct skynet_message *msg, void *ud) {
 }
 
 /* *
-  * @brief 创建一个模块管理结构
-  * @param[in] name 模块名，也做模块加载路径使用
-  * @param[in] param 额外参数
-  * @return 模块管理结构
+  * @brief create handle for module
+  * @param[in] name module name
+  * @param[in] param other param
+  * @return handle for module
   */
 struct skynet_context * 
 skynet_context_new(const char * name, const char *param) {
-	/*加载模块*/
+	/*load module*/
 	struct skynet_module * mod = skynet_module_query(name);
 
 	if (mod == NULL)
 		return NULL;
-	/*尝试调用注册的初始化函数初始化模块
-	实际上所有模块的初始化函数为同一个*/
+	/*init the module*/
 	void *inst = skynet_module_instance_create(mod);
 	if (inst == NULL)
 		return NULL;
-	/*申请更上层的模块管理结构并对
-	前面的模块管理结构包装*/
 
-	/*TODO bug ? 需要强制转换*/
 	struct skynet_context * ctx = skynet_malloc(sizeof(*ctx));
 
 	CHECKCALLING_INIT(ctx)
 
-        /*ctx 作为上层的模块管理结构*/
-	ctx->mod = mod;				/*模块的下层的管理结构*/
-	ctx->instance = inst;			/*下层模块初始化时获取到的结构*/
-	ctx->ref = 2;			        /*设置模块的引用为2*/
-	ctx->cb = NULL;				
+        /*warp the base handle as context*/
+	ctx->mod = mod;				/*manager of module*/
+	ctx->instance = inst;			/*data from init*/
+	ctx->ref = 2;			        /*ref as c*/
+	ctx->cb = NULL;				/*callback for recive msg*/
 	ctx->cb_ud = NULL;
 	ctx->session_id = 0;
-	ctx->logfile = NULL;                    /*指向日志文件的*/
+	ctx->logfile = NULL;                    /*logfile*/
 
 	ctx->init = false;
 	ctx->endless = false;
@@ -181,6 +183,7 @@ skynet_context_new(const char * name, const char *param) {
 	context_inc();
 
 	CHECKCALLING_BEGIN(ctx)
+	/*init with the inst*/
 	int r = skynet_module_instance_init(mod, inst, ctx, param);
 	CHECKCALLING_END(ctx)
 	if (r == 0) {
@@ -188,6 +191,7 @@ skynet_context_new(const char * name, const char *param) {
 		if (ret) {
 			ctx->init = true;
 		}
+		/*push the queue of this module into global queue in default*/
 		skynet_globalmq_push(queue);
 		if (ret) {
 			skynet_error(ret, "LAUNCH %s %s", name, param ? param : "");
@@ -204,6 +208,11 @@ skynet_context_new(const char * name, const char *param) {
 	}
 }
 
+/**
+ * @brief alloc a new session id for this socket
+ * @param[in] ctx handle for the module
+ * return session id 
+ */
 int
 skynet_context_newsession(struct skynet_context *ctx) {
 	// session always be a positive number
@@ -215,11 +224,20 @@ skynet_context_newsession(struct skynet_context *ctx) {
 	return session;
 }
 
+/**
+ * @brief add ref of the context
+ * @param[in] ctx handle for the module
+ *
+ */
 void 
 skynet_context_grab(struct skynet_context *ctx) {
 	__sync_add_and_fetch(&ctx->ref,1);
 }
 
+/**
+ *
+ *
+ */
 void
 skynet_context_reserve(struct skynet_context *ctx) {
 	skynet_context_grab(ctx);
@@ -229,29 +247,32 @@ skynet_context_reserve(struct skynet_context *ctx) {
 }
 
 /**
-  * @brief 删除一个模块
+  * @brief release the handle for module
   * @param[in|out] 指向待删除的模块
   */
 static void 
 delete_context(struct skynet_context *ctx) {
-	/*关闭日志文件*/
+	/*close the lofgile for this module*/
 	if (ctx->logfile) {
 		fclose(ctx->logfile);
 	}
-	/*释放模块自己使用的常驻结构*/
+	/*release inst*/
 	skynet_module_instance_release(ctx->mod, ctx->instance);
+	/*mark the queue of the module as release*/
 	skynet_mq_mark_release(ctx->queue);
+	/*free handle but the queue left*/
 	skynet_free(ctx);
 	context_dec();
 }
+
 /**
-  * @brief 减小模块的引用，类似智能指针的使用方式
-  * @param[in] ctx 待减小的智能指针
-  * return (模块被释放 ?  null : 模块的指针)
-  */
+ * @brief sub ref of the handle for module
+ * @param[in] ctx handle for module
+ * return (release ?  null : handle)
+ */
 struct skynet_context * 
 skynet_context_release(struct skynet_context *ctx) {
-	/*减小引用*/
+	/*ref sub*/
 	if (__sync_sub_and_fetch(&ctx->ref,1) == 0) {
 		delete_context(ctx);
 		return NULL;
@@ -259,6 +280,11 @@ skynet_context_release(struct skynet_context *ctx) {
 	return ctx;
 }
 
+/**
+ * @brief push the queue of the module into global queue
+ * @param[in] handle id of the module
+ *
+ */
 int
 skynet_context_push(uint32_t handle, struct skynet_message *message) {
 	struct skynet_context * ctx = skynet_handle_grab(handle);
@@ -281,6 +307,13 @@ skynet_context_endless(uint32_t handle) {
 	skynet_context_release(ctx);
 }
 
+/**
+ * @brief check if the handle is remote
+ * @param[in] ctx handle of the module
+ * @param[in] handle id of the module
+ * @param[in] harbor used to get harbor id
+ *
+ */
 int 
 skynet_isremote(struct skynet_context * ctx, uint32_t handle, int * harbor) {
 	int ret = skynet_harbor_message_isremote(handle);
@@ -290,6 +323,12 @@ skynet_isremote(struct skynet_context * ctx, uint32_t handle, int * harbor) {
 	return ret;
 }
 
+/**
+ * @brief deal with the msg to this module by callback register from the module
+ * @param[in] ctx handle of the module
+ * @param[in] msg msg to the module
+ *
+ */
 static void
 dispatch_message(struct skynet_context *ctx, struct skynet_message *msg) {
 	assert(ctx->init);
@@ -306,90 +345,95 @@ dispatch_message(struct skynet_context *ctx, struct skynet_message *msg) {
 	CHECKCALLING_END(ctx)
 }
 
+/**
+ * @brief try to pop one msg from the global queue and deal with it
+ * @param[in] ctx handle of the module
+ */
 void 
 skynet_context_dispatchall(struct skynet_context * ctx) {
 	// for skynet_error
 	struct skynet_message msg;
 	struct message_queue *q = ctx->queue;
+	/*pop one msg*/
 	while (!skynet_mq_pop(q,&msg)) {
+	        /*deal with it*/
 		dispatch_message(ctx, &msg);
 	}
 }
 
+/**
+ * @brief try to pop msg queue from global queue, them pop msg from the message queue and deal with it
+ * @param[in] s module manager
+ * @param[in] q message queue for module
+ * @param[in] weight used to deal with the num of msg pop out every loop
+ *
+ */
 struct message_queue * 
 skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue *q, int weight) {
-	/*目前q参数必定为NULL*/
 	if (q == NULL) {
-		/*尝试从全局队列中取出一个模块的队列*/
+		/*try to pop one msg from the queue of the module*/
 		q = skynet_globalmq_pop();
-		/*没取到返回NULL，表明此时用户数据较少
-		  导致worker线程过多*/
+		/*pop message fail*/
 		if (q==NULL)
 			return NULL;
 	}
 
-	 /*找到该工作队列对应的KEY*/
+	 /*find id of the module the queue belong to*/
 	uint32_t handle = skynet_mq_handle(q);
-      /*使用该关键字检索该队列对应的
-          模块的管理结构*/
+	    
+	/*get the hdnle*/
 	struct skynet_context * ctx = skynet_handle_grab(handle);
 
-	/*没找到则将该模块的队列从全局队列中取出*/  
-	/*TODO 更多研究*/
+	/*handle release because module handle release with queue left*/  
 	if (ctx == NULL) {
+	        /*drop the msg directly*/
 		struct drop_t d = { handle };
 		skynet_mq_release(q, drop_message, &d);
-		/*本次取出模块队列但该队列对应的管理结构无效
-		    所以需要重新再取一个*/
-
-		/*弹出下一个待处理队列*/
+		/*get next message queue*/
 		return skynet_globalmq_pop();
 	}
 
 	int i,n=1;
 	struct skynet_message msg;
-	/**注意，这里根据有效载荷量和权重在计算弹出数量*/
+	/*tot nums of msg pop out by weight and payload*/
 	for (i=0;i<n;i++) {
-		/*尝试从该模块的队列中出队一个消息*/
+		/*try to pop one msg*/
 		if (skynet_mq_pop(q,&msg)) {
-			/*该队列中的消息已经被取完了
-			   释放该模块管理的引用*/
+		         /*used out, so return*/
 			skynet_context_release(ctx);
 			return skynet_globalmq_pop();
 		} else if (i==0 && weight >= 0) {
-			/*获取该队列的有效载荷*/
-			n = skynet_mq_length(q);
-			/*注意只有权重为正的队列，且本次该函数
-			    第一次进入时会改变弹出个数*/
+			/*more msg left in it when pop msg first time*/
 
-			/*根据第一取出队列的载荷和权重重置弹出数量*/
+		        /*get num of msg left in it*/
+			n = skynet_mq_length(q);
+
+                        /*update the msg nums need to pop out*/
 			n >>= weight;
 		}
-		/*获取最后一个被弹出后队列的有效载荷*/
+		/*check if the queue is overload*/
 		int overload = skynet_mq_overload(q);
 
-		/*队列超过负荷*/
+		/*overload*/
 		if (overload) {
 			skynet_error(ctx, "May overload, message queue length = %d", overload);
 		}
 
-		/*类似看门狗*/
+		/*TODO watch dog???!!*/
 		skynet_monitor_trigger(sm, msg.source , handle);
 
 		if (ctx->cb == NULL) {
-			/*对应的模块管理结构没有处理函数则
-			 直接清空该消息*/
 			skynet_free(msg.data);
 		} else {
-			/*使用模块注册的回掉函数处理该消息*/
+		        /*deal with the msg*/
 			dispatch_message(ctx, &msg);
 		}
-		/*类似看门狗*/
+		/*TODO watch dog???!!*/
 		skynet_monitor_trigger(sm, 0,0);
 	}
 
 	assert(q == ctx->queue);
-	/*最后尝试取出一个模块消息队列*/
+	/*try to pop one message queue in the end*/
 	struct message_queue *nq = skynet_globalmq_pop();
 	if (nq) {
 		// If global mq is not empty , push q back, and return next queue (nq)
@@ -398,7 +442,6 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 		skynet_globalmq_push(q);
 		q = nq;
 	} 
-	/*释放前面获取到的模块管理结构的引用*/
 	skynet_context_release(ctx);
 
 	return q;

@@ -1,3 +1,8 @@
+/**
+ * @file socket_poll.c
+ * @brief wrap of epoll api
+ *
+ */
 #ifndef poll_socket_epoll_h
 #define poll_socket_epoll_h
 
@@ -12,7 +17,7 @@
 
 /**
  * @brief check if the efd if valid
- * @param[in] rfd fd for socket
+ * @param[in] efd efd
  * @return valid ? false : true
  */
 static bool 
@@ -31,7 +36,6 @@ sp_create() {
 
 /**
  * @brief close the handle of the epoll
- *
  */
 static void
 sp_release(int efd) {
@@ -58,6 +62,8 @@ sp_add(int efd, int sock, void *ud) {
 
 /**
  * @brief delete the event in epoll
+ * @param[in] efd handle of epoll
+ * @param[in] socket socket to register
  *
  */
 static void 
@@ -68,8 +74,8 @@ sp_del(int efd, int sock) {
 /**
  * @brief register event of write
  * @param[in]  efd handle of the epoll
- * @param[in]  ud private data of epoll
- * @param[in]  enable enable the epollout
+ * @param[in]  ud private data 
+ * @param[in]  enable enable the write ?
  *
  */
 static void 
@@ -83,9 +89,10 @@ sp_write(int efd, int sock, void *ud, bool enable) {
 }
 
 /**
- * @brief wait the event active and mark all evnet occured
+ * @brief wait the event active and mark all evnets occured
  * @param[in] efd handle of the epoll
  * @param[in] e get the evnet actived
+ * @param[in] max max event could hold
  * @reutn 
  *
  */
