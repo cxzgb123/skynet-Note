@@ -506,28 +506,48 @@ handle_exit(struct skynet_context * context, uint32_t handle) {
 }
 
 // skynet command
-
+/**
+ * @brief command 
+ *
+ */
 struct command_func {
-	const char *name;
-	const char * (*func)(struct skynet_context * context, const char * param);
+	const char *name;                                                               /*command name*/
+	const char * (*func)(struct skynet_context * context, const char * param);      /*callback for this command*/
 };
 
+/**
+ * @brief register timer for session
+ * @param[in] context module handle
+ * @param[in] param hold the timer
+ *
+ */
 static const char *
 cmd_timeout(struct skynet_context * context, const char * param) {
 	char * session_ptr = NULL;
+	/*get timer*/
 	int ti = strtol(param, &session_ptr, 10);
+	/*alloc new session for this module*/
 	int session = skynet_context_newsession(context);
+	/*register time evnet*/
 	skynet_timeout(context->handle, ti, session);
 	sprintf(context->result, "%d", session);
 	return context->result;
 }
 
+/**
+ * @brief try to register 'name string = handle' into module manager
+ * @param[in] context handle of the module
+ * @param[in] param param wait to register
+ *
+ */
 static const char *
 cmd_reg(struct skynet_context * context, const char * param) {
 	if (param == NULL || param[0] == '\0') {
+	        /*put into module id as %x into module handle*/
 		sprintf(context->result, ":%x", context->handle);
 		return context->result;
 	} else if (param[0] == '.') {
+	        /*string, so insert  'name string = handle' pair into module name manager*/
 		return skynet_handle_namehandle(context->handle, param + 1);
 	} else {
 		skynet_error(context, "Can't register global name %s in C", param);
@@ -904,7 +924,7 @@ skynet_callback(struct skynet_context * context, void *ud, skynet_cb cb) {
 
 /**
  * @brief module send one msg
- * @param[in] skynet_context ctx manager for module
+ * @param[in] ctx handle  for module
  * @param[in] msg msg want to sand
  * @param[in] sz size of the msg
  * @param[in] source source of the msg
