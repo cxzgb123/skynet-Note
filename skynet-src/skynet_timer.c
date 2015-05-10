@@ -214,17 +214,22 @@ skynet_timeout(uint32_t handle, int time, int session) {
 	if (time == 0) {
 		struct skynet_message message;
 		message.source = 0;
+		/*set session id*/
 		message.session = session;
 		message.data = NULL;
+		/*mark this msg as response*/
 		message.sz = PTYPE_RESPONSE << HANDLE_REMOTE_SHIFT;
-
+                /*send this msg to the module, trigger directly*/
 		if (skynet_context_push(handle, &message)) {
 			return -1;
 		}
 	} else {
 		struct timer_event event;
-		event.handle = handle;
+		/*set module id*/
+		event.handle = handle;  
+		/*set session*/
 		event.session = session;
+		/*add this event to timer list, trigger after time*/
 		timer_add(TI, &event, sizeof(event), time);
 	}
 
