@@ -795,9 +795,17 @@ static struct command_func cmd_funcs[] = {
 	{ NULL, NULL },
 };
 
+/**
+ * @brief try to call cmd 
+ * @param[in] context handle of the module
+ * @param[in] cmd cmd to call
+ * @param[in] param param for the cmd's callback
+ *
+ */
 const char * 
 skynet_command(struct skynet_context * context, const char * cmd , const char * param) {
 	struct command_func * method = &cmd_funcs[0];
+	/*lookup cmd in O(n)*/
 	while(method->name) {
 		if (strcmp(cmd, method->name) == 0) {
 			return method->func(context, param);
@@ -808,18 +816,31 @@ skynet_command(struct skynet_context * context, const char * cmd , const char * 
 	return NULL;
 }
 
+/**
+ * @brief try to update size, get session, alloc payload 
+ * @param[in] contex module handle
+ * @param[in] type msg type
+ * @param[in] session session id of this msg
+ * @param[out] data ptr payload
+ * @param[in] sz size of the payload
+ */
 static void
 _filter_args(struct skynet_context * context, int type, int *session, void ** data, size_t * sz) {
-	int needcopy = !(type & PTYPE_TAG_DONTCOPY);
+	/*check if need copy*/
+        int needcopy = !(type & PTYPE_TAG_DONTCOPY);
+        /*check if need copy payload*/
 	int allocsession = type & PTYPE_TAG_ALLOCSESSION;
+	
 	type &= 0xff;
 
 	if (allocsession) {
+	        /*alloc a new session not used*/
 		assert(*session == 0);
 		*session = skynet_context_newsession(context);
 	}
 
 	if (needcopy && *data) {
+	        /*try to copy payload*/
 		char * msg = skynet_malloc(*sz+1);
 		memcpy(msg, *data, *sz);
 		msg[*sz] = '\0';
@@ -829,6 +850,16 @@ _filter_args(struct skynet_context * context, int type, int *session, void ** da
 	*sz |= type << HANDLE_REMOTE_SHIFT;
 }
 
+/**
+ * @brief send msg to other module by destination
+ * @param[in] contex module handle
+ * @param[in] source msg from
+ * @param[in] destination   dst module id
+ * @param[in] type msg type
+ * @param[in] session session id of this msg
+ * @param[out] data ptr payload
+ * @param[in] sz size of the payload
+ */
 int
 skynet_send(struct skynet_context * context, uint32_t source, uint32_t destination , int type, int session, void * data, size_t sz) {
 	if ((sz & HANDLE_MASK) != sz) {
@@ -836,6 +867,7 @@ skynet_send(struct skynet_context * context, uint32_t source, uint32_t destinati
 		skynet_free(data);
 		return -1;
 	}
+        /*brief try to update size, get session, alloc payload*/
 	_filter_args(context, type, &session, (void **)&data, &sz);
 
 	if (source == 0) {
@@ -847,12 +879,14 @@ skynet_send(struct skynet_context * context, uint32_t source, uint32_t destinati
 		return session;
 	}
 	if (skynet_harbor_message_isremote(destination)) {
-		struct remote_message * rmsg = skynet_malloc(sizeof(*rmsg));
+	    /*send to the remote when dst is remote*/
+	        struct remote_message * rmsg = skynet_malloc(sizeof(*rmsg));
 		rmsg->destination.handle = destination;
 		rmsg->message = data;
 		rmsg->sz = sz;
 		skynet_harbor_send(rmsg, source, session);
 	} else {
+	    /*msg send to local module */
 		struct skynet_message smsg;
 		smsg.source = source;
 		smsg.session = session;
@@ -867,9 +901,21 @@ skynet_send(struct skynet_context * context, uint32_t source, uint32_t destinati
 	return session;
 }
 
+/**
+ * @brief send msg to other module by name
+ * @param[in] contex module handle
+ * @param[in] source msg from
+ * @param[in] addr   dst string 
+ * @param[in] type msg type
+ * @param[in] session session id of this msg
+ * @param[out] data ptr payload
+ * @param[in] sz size of the payload
+ *
+ */
 int
 skynet_sendname(struct skynet_context * context, uint32_t source, const char * addr , int type, int session, void * data, size_t sz) {
-	if (source == 0) {
+    	/*use module is if source == 0*/
+        if (source == 0) {
 		source = context->handle;
 	}
 	uint32_t des = 0;
@@ -884,23 +930,25 @@ skynet_sendname(struct skynet_context * context, uint32_t source, const char * a
 			return -1;
 		}
 	} else {
+	        /*msg send to remote!!!!!!*/
 		_filter_args(context, type, &session, (void **)&data, &sz);
-
+            
+                /*build remote msg*/
 		struct remote_message * rmsg = skynet_malloc(sizeof(*rmsg));
 		copy_name(rmsg->destination.name, addr);
 		rmsg->destination.handle = 0;
 		rmsg->message = data;
 		rmsg->sz = sz;
-
+                /*send msg to the remote*/
 		skynet_harbor_send(rmsg, source, session);
 		return session;
 	}
-
+        /*send msg to local module*/
 	return skynet_send(context, source, des, type, session, data, sz);
 }
 
 /**
- * @brief get the id of the module manager
+ * @brief get the id of the module handle
  * @return the module's id
  */
 uint32_t 
@@ -911,7 +959,7 @@ skynet_context_handle(struct skynet_context *ctx) {
 /**
  * @breif reigster the callback and module structure into module manager 
  * @param[in] cotext module manager
- * @param[in] ud sturucture for the module
+ * @param[in] ud structure for the module
  * @param[in] cb callback for deal with message
  * @ud and cb build by init _callback in the module
  */
@@ -925,8 +973,8 @@ skynet_callback(struct skynet_context * context, void *ud, skynet_cb cb) {
 /**
  * @brief module send one msg
  * @param[in] ctx handle  for module
- * @param[in] msg msg want to sand
- * @param[in] sz size of the msg
+ * @param[in] msg msg wait to sand
+ * @param[in] sz size of the payload in msg
  * @param[in] source source of the msg
  * @param[in] type node id for the msg
  * @param[in] session id of the msg
@@ -946,7 +994,6 @@ skynet_context_send(struct skynet_context * ctx, void * msg, size_t sz, uint32_t
 
 /**
  * @brief init the node manager for skynet
- *
  */
 void 
 skynet_globalinit(void) {
