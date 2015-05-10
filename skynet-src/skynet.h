@@ -22,8 +22,8 @@
 #define PTYPE_RESERVED_LUA 10
 #define PTYPE_RESERVED_SNAX 11
 
-#define PTYPE_TAG_DONTCOPY 0x10000
-#define PTYPE_TAG_ALLOCSESSION 0x20000
+#define PTYPE_TAG_DONTCOPY 0x10000     /*don't free payload*/ 
+#define PTYPE_TAG_ALLOCSESSION 0x20000 /*use session id not used*/
 
 struct skynet_context;
 
