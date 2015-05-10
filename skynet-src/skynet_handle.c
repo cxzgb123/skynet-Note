@@ -128,8 +128,6 @@ skynet_handle_retire(uint32_t handle) {
 
 /**
  * @brief unregistered all modules
- *
- *
  */
 void 
 skynet_handle_retireall() {
@@ -220,7 +218,6 @@ skynet_handle_findname(const char * name) {
  * @param[in] name new module's name
  * @param[in] handle index of the module
  * @param[in] before the other module's index in name storage
- *
  */
 static void
 _insert_name_before(struct handle_storage *s, char *name, uint32_t handle, int before) {
@@ -283,7 +280,6 @@ _insert_name(struct handle_storage *s, const char * name, uint32_t handle) {
  * @param[in] id of the module
  * @param[in] name name wait to insert
  * @return module's name
- *
  */
 const char * 
 skynet_handle_namehandle(uint32_t handle, const char *name) {
@@ -297,27 +293,27 @@ skynet_handle_namehandle(uint32_t handle, const char *name) {
 }
 
 /**
-  * @brief 设置模块管理结构
-  * @param[in] harbor 节点ID
-  *  
+  * @brief init the module manager
+  * @param[in] harbor harbor id
   */
 void 
 skynet_handle_init(int harbor) {
 	assert(H==NULL);
 	struct handle_storage * s = skynet_malloc(sizeof(*H));
-	/*默认空位数*/
+	/*slot of socket vec size*/
 	s->slot_size = DEFAULT_SLOT_SIZE;
+
 	s->slot = skynet_malloc(s->slot_size * sizeof(struct skynet_context *));
 	memset(s->slot, 0, s->slot_size * sizeof(struct skynet_context *));
 
 	rwlock_init(&s->lock);
 	// reserve 0 for system
 
-	/*节点id站32bit高4位*/
+	/*harbor in high 8bit*/
 	s->harbor = (uint32_t) (harbor & 0xff) << HANDLE_REMOTE_SHIFT;
 	
-	s->handle_index = 1;   /*初始待使用槽索引为1*/
-	s->name_cap = 2;       /*名称容量为2*/
+	s->handle_index = 1;   
+	s->name_cap = 2;    
 	s->name_count = 0;
 	s->name = skynet_malloc(s->name_cap * sizeof(struct handle_name));
 
