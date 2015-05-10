@@ -1,3 +1,8 @@
+/**
+ * @file skynet_socket.c
+ * @brief api for use to ctrl socket and socket thread api
+ *
+ */
 #include "skynet.h"
 
 #include "skynet_socket.h"
@@ -11,12 +16,14 @@
 #include <string.h>
 #include <stdbool.h>
 
+/**
+ * @brief handle in local
+ */
 static struct socket_server * SOCKET_SERVER = NULL;
 
 /**
  * @brief init the socket manager
  * return the handle of the socket manager
- *
  */
 void 
 skynet_socket_init() {
@@ -33,8 +40,6 @@ skynet_socket_exit() {
 
 /**
  * @brief delete all of the socket thread
- *
- *
  */
 void
 skynet_socket_free() {
@@ -46,7 +51,7 @@ skynet_socket_free() {
 /**
  * @brief forward the msg to the usr module 
  * @param[in] type what happened 
- * @param[in] padding exist data in result->data
+ * @param[in] padding store payload after msg ?
  * @param[in] result result msg wait to send 
  */
 static void
@@ -66,8 +71,10 @@ forward_message(int type, bool padding, struct socket_message * result) {
 	sm->ud = result->ud;
 	if (padding) {
 		sm->buffer = NULL;
+		/*store payload after msg*/
 		memcpy(sm+1, result->data, sz - sizeof(*sm));
 	} else {
+	        /*store payload in data*/
 		sm->buffer = result->data;
 	}
 
@@ -80,7 +87,6 @@ forward_message(int type, bool padding, struct socket_message * result) {
 	
 	//push the msg into queue to the module
 	if (skynet_context_push((uint32_t)result->opaque, &message)) {
-		// todo: report somewhere to close socket
 		// don't call skynet_socket_close here (It will block mainloop)
 		skynet_free(sm->buffer);
 		skynet_free(sm);
@@ -88,9 +94,7 @@ forward_message(int type, bool padding, struct socket_message * result) {
 }
 
 /**
- * @brief as door of this server, accept client, 
- *  get client msg forward it to module, wirte msg to client
- * @return close socket manager ? <= 0 : 1
+ *  @brief deal with the msg from usr and forward the result msg to the module 
  */
 int 
 skynet_socket_poll() {
@@ -99,9 +103,11 @@ skynet_socket_poll() {
 	/*result used to hold return msg from the socket_server_poll*/
 	struct socket_message result;
 	int more = 1;
-	/*wait evnet occured, and solve the event with the result info return */
+	
+	/*wait evnet occured, and solve the event with the result msg as return */
 	int type = socket_server_poll(ss, &result, &more);
-	/*forward the result msg recive from event*/
+
+	/*forward the result msg recive */
 	switch (type) {
 	case SOCKET_EXIT:   /*close the socket manager*/
 		return 0;
@@ -134,8 +140,6 @@ skynet_socket_poll() {
 	return 1;
 }
 
-
-
 static int
 check_wsz(struct skynet_context *ctx, int id, void *buffer, int64_t wsz) {
 	if (wsz < 0) {
@@ -150,28 +154,58 @@ check_wsz(struct skynet_context *ctx, int id, void *buffer, int64_t wsz) {
 	return 0;
 }
 
+/**
+ *  @brief send payload high
+ *  @param[in] ctx handle of the module
+ *  @param[in] id id of the slot
+ *  @param[in] buffer payload
+ *  @param[in] sz payload size
+ *  @note api for usr
+ *
+ */
 int
 skynet_socket_send(struct skynet_context *ctx, int id, void *buffer, int sz) {
 	int64_t wsz = socket_server_send(SOCKET_SERVER, id, buffer, sz);
 	return check_wsz(ctx, id, buffer, wsz);
 }
 
+
+/**
+ *  @brief send payload low
+ *  @param[in] ctx handle of the module
+ *  @param[in] id id of the slot
+ *  @param[in] buffer payload
+ *  @param[in] sz payload size
+ *  @note api for usr
+ *
+ */
 void
 skynet_socket_send_lowpriority(struct skynet_context *ctx, int id, void *buffer, int sz) {
 	socket_server_send_lowpriority(SOCKET_SERVER, id, buffer, sz);
 }
 
+/**
+ *  @brief send listen request
+ *  @param[in] ctx handle of the module
+ *  @param[in] host host to bind
+ *  @param[in] port port to listen
+ *  @param[in] backlog listen limit fd
+ *  @note api for usr
+ *
+ */
 int 
 skynet_socket_listen(struct skynet_context *ctx, const char *host, int port, int backlog) {
 	uint32_t source = skynet_context_handle(ctx);
 	return socket_server_listen(SOCKET_SERVER, source, host, port, backlog);
 }
 
+
 /**
- * @brief try to connect others by tcp
- * @param[in] ctx handle for the module
- * @param[in] host ip wait to connect
- * @param[in] port port wait to connect
+ *  @brief send connect request
+ *  @param[in] ctx handle of the module
+ *  @param[in] host host to connect
+ *  @param[in] port port to connect
+ *  @note api for usr
  *
  */
 int 
@@ -182,40 +216,89 @@ skynet_socket_connect(struct skynet_context *ctx, const char *host, int port) {
 	return socket_server_connect(SOCKET_SERVER, source, host, port);
 }
 
+/**
+ *  @brief send bind request
+ *  @param[in] ctx handle of the module
+ *  @param[in] file file to bind
+ *  @note api for usr
+ *
+ */
 int 
 skynet_socket_bind(struct skynet_context *ctx, int fd) {
 	uint32_t source = skynet_context_handle(ctx);
 	return socket_server_bind(SOCKET_SERVER, source, fd);
 }
 
+/**
+ *  @brief send sockt close request
+ *  @param[in] ctx handle of the module
+ *  @param[in] id socket id
+ *  @note api for usr
+ */
 void 
 skynet_socket_close(struct skynet_context *ctx, int id) {
 	uint32_t source = skynet_context_handle(ctx);
 	socket_server_close(SOCKET_SERVER, source, id);
 }
 
+
+/**
+ *  @brief send sockt start request
+ *  @param[in] id socket id
+ *  @param[in] ctx handle of the module
+ *  @note api for usr
+ */
 void 
 skynet_socket_start(struct skynet_context *ctx, int id) {
 	uint32_t source = skynet_context_handle(ctx);
 	socket_server_start(SOCKET_SERVER, source, id);
 }
 
+
+/**
+ *  @brief send sockt nodely request
+ *  @param[in] ctx handle of the module
+ *  @param[in] id socket id
+ *  @note api for usr
+ */
 void
 skynet_socket_nodelay(struct skynet_context *ctx, int id) {
 	socket_server_nodelay(SOCKET_SERVER, id);
 }
 
+/**
+ *  @brief send udp sockt  request to init udp socket
+ *  @param[in] ctx handle of the module
+ *  @param[in] addr address to send or null
+ *  @param[in] port address to send or null
+ *  @note api for us
+ */
 int 
 skynet_socket_udp(struct skynet_context *ctx, const char * addr, int port) {
 	uint32_t source = skynet_context_handle(ctx);
 	return socket_server_udp(SOCKET_SERVER, source, addr, port);
 }
 
+/**
+ *  @brief send request to set udp payload send to
+ *  @param[in] ctx handle of the module
+ *  @param[in] addr address to send or null
+ *  @param[in] port address to send or null
+ *  @note api for us
+ */
 int 
 skynet_socket_udp_connect(struct skynet_context *ctx, int id, const char * addr, int port) {
 	return socket_server_udp_connect(SOCKET_SERVER, id, addr, port);
 }
 
+/**
+ *  @brief send payload to udp socket
+ *  @param[in] ctx handle of the module
+ *  @param[in] addr address to send or null
+ *  @param[in] buffer payload of udp msg
+ *  @param[in] sz szie of payload
+ *  @note api for us
+ */
 int 
 skynet_socket_udp_send(struct skynet_context *ctx, int id, const char * address, const void *buffer, int sz) {
 	int64_t wsz = socket_server_udp_send(SOCKET_SERVER, id, (const struct socket_udp_address *)address, buffer, sz);
@@ -224,8 +307,7 @@ skynet_socket_udp_send(struct skynet_context *ctx, int id, const char * address,
 
 /**
  * @brief get the address string of the udp address
- * @reutnr string of the udp address
- *
+ * @return string of the udp address
  */
 const char *
 skynet_socket_udp_address(struct skynet_socket_message *msg, int *addrsz) {

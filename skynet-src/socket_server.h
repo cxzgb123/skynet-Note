@@ -13,11 +13,15 @@
 
 struct socket_server;
 
+/**
+ * @brief msg for the socket layer
+ *
+ */
 struct socket_message {
-	int id;
-	uintptr_t opaque;
+	int id;                 /*socket id*/
+	uintptr_t opaque;       /*module id*/
 	int ud;	// for accept, ud is listen id ; for data, ud is size of data 
-	char * data;
+	char * data;            /*payload*/
 };
 
 struct socket_server * socket_server_create();

@@ -2123,7 +2123,7 @@ socket_server_udp_connect(struct socket_server *ss, int id, const char * addr, i
 
 	freeaddrinfo( ai_list );
 
-	/*sed the connect request msg to the socket thread*/
+	/*send the connect request msg to the socket thread*/
 
 	send_request(ss, &request, 'C', sizeof(request.u.set_udp) - sizeof(request.u.set_udp.address) +addrsz);
 

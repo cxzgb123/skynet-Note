@@ -10,11 +10,15 @@ struct skynet_context;
 #define SKYNET_SOCKET_TYPE_ERROR 5
 #define SKYNET_SOCKET_TYPE_UDP 6
 
+/**
+ *  @brief msg for usr layer
+ *
+ */
 struct skynet_socket_message {
-	int type;
-	int id;
-	int ud;
-	char * buffer;
+	int type;           /*type of the msg*/
+	int id;             /*slot id*/
+	int ud;             /*payload size or id, fd*/
+	char * buffer;      /*payload*/
 };
 
 void skynet_socket_init();

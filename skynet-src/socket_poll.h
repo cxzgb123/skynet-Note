@@ -6,14 +6,12 @@
 typedef int poll_fd;
 
 /**
- *
- *
- *
+ * @brief used to record what happended
  */
 struct event {
-	void * s;
-	bool read;
-	bool write;
+	void * s;       /*socket handle*/
+	bool read;      /*read  record*/
+	bool write;     /*write record*/
 };
 
 static bool sp_invalid(poll_fd fd);
