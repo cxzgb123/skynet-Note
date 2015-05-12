@@ -15,7 +15,7 @@
 #include <sys/time.h>
 #endif
 
-typedef void (*timer_execute_func)(void *ud,void *arg);
+typedef void (*timer_execute_func)(void *ud,void *arg);     /*callback trigger by timer*/
 
 #define LOCK(q) while (__sync_lock_test_and_set(&(q)->lock,1)) {}
 #define UNLOCK(q) __sync_lock_release(&(q)->lock);
@@ -27,33 +27,45 @@ typedef void (*timer_execute_func)(void *ud,void *arg);
 #define TIME_NEAR_MASK (TIME_NEAR-1)
 #define TIME_LEVEL_MASK (TIME_LEVEL-1)
 
+/**
+ * @brief store id of event in timer
+ */
 struct timer_event {
-	uint32_t handle;
-	int session;
+	uint32_t handle;    /*handle of the module*/
+	int session;        /*session id of the event*/
 };
 
+/**
+ * @brief wrap of timer_event as a node in timer list
+ */
 struct timer_node {
-	struct timer_node *next;
-	uint32_t expire;
+	struct timer_node *next; /*linker*/
+	uint32_t expire;         /*trigger time record*/
 };
 
+/**
+ * @brief used to link all timer node together
+ */
 struct link_list {
-	struct timer_node head;
-	struct timer_node *tail;
+	struct timer_node head;  /*head of list*/       
+	struct timer_node *tail; /*tail of list*/
 };
 
+/**
+ * @brief handle of all timer event
+ */
 struct timer {
 	struct link_list near[TIME_NEAR];
 	struct link_list t[4][TIME_LEVEL];
-	int lock;
-	uint32_t time;
-	uint32_t current;
-	uint32_t starttime;
+	int lock;               /*spin lock*/
+	uint32_t time;          /*time cost*/
+	uint32_t current;       /*curr time*/
+	uint32_t starttime;     /*start time*/
 	uint64_t current_point;
 	uint64_t origin_point;
 };
 
-static struct timer * TI = NULL;
+static struct timer * TI = NULL; /*local handle for all timer event*/
 
 static inline struct timer_node *
 link_clear(struct link_list *list) {
@@ -92,14 +104,24 @@ add_node(struct timer *T,struct timer_node *node) {
 	}
 }
 
+/**
+ * @brief handle of  all time events
+ * @param[in] timer handle
+ * @param[in] arg arg for this event
+ * @param[in] sz size of the arg
+ * @param[in] trigger time
+ */
 static void
 timer_add(struct timer *T,void *arg,size_t sz,int time) {
+        /*alloc a node, as arg store after node*/
 	struct timer_node *node = (struct timer_node *)skynet_malloc(sizeof(*node)+sz);
+	/*copy arg*/
 	memcpy(node+1,arg,sz);
 
 	LOCK(T);
-
+                /*update the expire time*/
 		node->expire=time+T->time;
+		/*add the node into timer handle*/
 		add_node(T,node);
 
 	UNLOCK(T);
