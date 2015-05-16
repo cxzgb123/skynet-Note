@@ -103,7 +103,7 @@ _open_sym(struct skynet_module *mod) {
 	memcpy(tmp, mod->name, name_size);
 	/*加载create 回调*/
 	strcpy(tmp+name_size, "_create");
-	mod->create = dlsym(mod->module, tmp);a
+	mod->create = dlsym(mod->module, tmp);
 	/*加载初始化模块回调*/
 	strcpy(tmp+name_size, "_init");
 	mod->init = dlsym(mod->module, tmp);
