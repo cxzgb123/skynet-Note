@@ -67,6 +67,12 @@ struct timer {
 
 static struct timer * TI = NULL; /*local handle for all timer event*/
 
+/**
+ * @brief pop out the all timer_nodes  as a list
+ * @param[in] list timer list
+ * return all timer as a lst
+ *
+ */
 static inline struct timer_node *
 link_clear(struct link_list *list) {
 	struct timer_node * ret = list->head.next;
@@ -76,6 +82,12 @@ link_clear(struct link_list *list) {
 	return ret;
 }
 
+/**
+ * @brief add timer_node into the tail of the timer_list
+ * @param[in] list timer list
+ * @param[in] node node of the timer list
+ *
+ */
 static inline void
 link(struct link_list *list,struct timer_node *node) {
 	list->tail->next = node;
