@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
+/*lua handle manger*/
 struct skynet_env {
 	int lock;           /*lock */
 	lua_State *L;       /*lua handle*/
@@ -59,8 +60,6 @@ skynet_setenv(const char *key, const char *value) {
 
 /**
  * @brief init the handle of lua
- *
- *
  */
 void
 skynet_env_init() {

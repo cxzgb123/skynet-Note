@@ -79,7 +79,7 @@ struct wb_list {
 
 
 /**
- * @brief manager all the socket
+ * @brief manager socket, udp or tcp
  */
 struct socket {
 	uintptr_t opaque;   /*id of the module socket belong to*/
@@ -226,8 +226,8 @@ struct request_package {
 	uint8_t header[8];	// 6 bytes dummy
 	union {
 		char buffer[256];
-		struct request_open open;
-		struct request_send send;
+		struct request_open open;               
+		struct request_send send;               
 		struct request_send_udp send_udp;
 		struct request_close close;
 		struct request_listen listen;
@@ -285,7 +285,6 @@ send_object_init(struct socket_server *ss, struct send_object *so, void *object,
 	}
 }
 
-
 /**
  * @brief try to free write buffer
  * @brief ss socket manager
@@ -303,7 +302,7 @@ write_buffer_free(struct socket_server *ss, struct write_buffer *wb) {
 }
 
 /**
- * @brief socket install keepalive 
+ * @brief Install keepalive in the socket
  * @param[in]  fd socket wait to set keepalive
  */
 static void
@@ -311,7 +310,6 @@ socket_keepalive(int fd) {
 	int keepalive = 1;
 	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive , sizeof(keepalive));  
 }
-
 
 /**
  * @brief get id by socket_server
@@ -355,7 +353,6 @@ clear_wb_list(struct wb_list *list) {
 	list->tail = NULL;
 }
 
-
 /**
  * @brief create server manager for skynet 
  * @return handle for server in skynet
@@ -388,6 +385,7 @@ socket_server_create() {
 
         /*alloc socket manager*/
 	struct socket_server *ss = MALLOC(sizeof(*ss));
+
 	/*store the epoll handle in manager*/
 	ss->event_fd = efd;
 
