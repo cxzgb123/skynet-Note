@@ -67,7 +67,7 @@ forward_message(int type, bool padding, struct socket_message * result) {
 	}
 	sm = (struct skynet_socket_message *)skynet_malloc(sz);
 	sm->type = type;            //msg type
-	sm->id = result->id;        //
+	sm->id = result->id;        //msg id
 	sm->ud = result->ud;
 	if (padding) {
 		sm->buffer = NULL;
@@ -94,7 +94,7 @@ forward_message(int type, bool padding, struct socket_message * result) {
 }
 
 /**
- *  @brief deal with the msg from usr and forward the result msg to the module 
+ *  @brief deal with the msg from usr, forward the result msg to the module 
  */
 int 
 skynet_socket_poll() {
@@ -120,16 +120,16 @@ skynet_socket_poll() {
 	case SOCKET_OPEN:   /*forward socket open info*/
 		forward_message(SKYNET_SOCKET_TYPE_CONNECT, true, &result);
 		break;
-	case SOCKET_ERROR: /*forward socket error info*/
+	case SOCKET_ERROR:  /*forward socket error info*/
 		forward_message(SKYNET_SOCKET_TYPE_ERROR, false, &result);
 		break;
-	case SOCKET_ACCEPT:/*forward socket accept msg*/
+	case SOCKET_ACCEPT: /*forward socket accept msg*/
 		forward_message(SKYNET_SOCKET_TYPE_ACCEPT, true, &result);
 		break;
-	case SOCKET_UDP:  /*forward payload recive from udp*/
+	case SOCKET_UDP:   /*forward payload recive from udp*/
 		forward_message(SKYNET_SOCKET_TYPE_UDP, false, &result);
 		break;
-	default:
+	default:           /*unknown msg type*/
 		skynet_error(NULL, "Unknown socket message type %d.",type);
 		return -1;
 	}
@@ -154,6 +154,9 @@ check_wsz(struct skynet_context *ctx, int id, void *buffer, int64_t wsz) {
 	return 0;
 }
 
+///////////////////////////////////////////////////////////////
+/*The api used for use*/
+
 /**
  *  @brief send payload high
  *  @param[in] ctx handle of the module
@@ -168,7 +171,6 @@ skynet_socket_send(struct skynet_context *ctx, int id, void *buffer, int sz) {
 	int64_t wsz = socket_server_send(SOCKET_SERVER, id, buffer, sz);
 	return check_wsz(ctx, id, buffer, wsz);
 }
-
 
 /**
  *  @brief send payload low
@@ -241,7 +243,6 @@ skynet_socket_close(struct skynet_context *ctx, int id) {
 	socket_server_close(SOCKET_SERVER, source, id);
 }
 
-
 /**
  *  @brief send sockt start request
  *  @param[in] id socket id
@@ -253,7 +254,6 @@ skynet_socket_start(struct skynet_context *ctx, int id) {
 	uint32_t source = skynet_context_handle(ctx);
 	socket_server_start(SOCKET_SERVER, source, id);
 }
-
 
 /**
  *  @brief send sockt nodely request

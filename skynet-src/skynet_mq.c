@@ -70,8 +70,6 @@ skynet_globalmq_push(struct message_queue * queue) {
 	UNLOCK(q)
 }
 
-
-
 /**
  * @brief pop one module queue from the global queue
  * @param[in|out] queue pointer for the module queue
@@ -92,7 +90,6 @@ skynet_globalmq_pop() {
 		mq->next = NULL;
 	}
 	UNLOCK(q)
-
 	return mq;
 }
 
@@ -161,7 +158,6 @@ skynet_mq_length(struct message_queue *q) {
 	if (head <= tail) {
 		return tail - head;
 	}
-	/*TODO bug ? overflow cap - head + tail better*/
 	return tail + cap - head;
 }
 
@@ -206,7 +202,6 @@ skynet_mq_pop(struct message_queue *q, struct skynet_message *message) {
 		}
 
 		/*get the tot message in the queue*/
-		/*TODO already exist  api for the*/
 		int length = tail - head;
 		if (length < 0) {
 			length += cap;
@@ -256,6 +251,7 @@ expand_queue(struct message_queue *q) {
 	skynet_free(q->queue);
 	q->queue = new_queue;
 }
+
 /**
   * @brief push one message into the module queue
   * @param[in|out] q queue for the module
@@ -292,6 +288,7 @@ skynet_mq_init() {
 	memset(q,0,sizeof(*q));
 	Q=q;
 }
+
 /**
   * @brief mark the queue as wait to release
   * @param[in] q handle of the queue
