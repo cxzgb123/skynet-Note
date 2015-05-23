@@ -5,8 +5,7 @@
 ##TODO 
  - 继续分析代码
  - 决定用英文注释，因此需要将前面部分中文注释改为英语
-
-
+ - 研究内部模块
 
 ## Build
 For linux, install autoconf first for jemalloc
