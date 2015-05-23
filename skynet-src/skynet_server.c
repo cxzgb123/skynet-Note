@@ -297,6 +297,10 @@ skynet_context_push(uint32_t handle, struct skynet_message *message) {
 	return 0;
 }
 
+/**
+ * @brief mark the module exit if context marked with endless
+ * @param[in] handle of the module
+ */
 void 
 skynet_context_endless(uint32_t handle) {
 	struct skynet_context * ctx = skynet_handle_grab(handle);
@@ -419,7 +423,8 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 			skynet_error(ctx, "May overload, message queue length = %d", overload);
 		}
 
-		/*TODO watch dog???!!*/
+		/*update monitor, as a watch dog for module*/
+		/*notice, if the callback of the module in work, dst in trigger is not zero!!!!!, used for monitor*/
 		skynet_monitor_trigger(sm, msg.source , handle);
 
 		if (ctx->cb == NULL) {
@@ -428,7 +433,7 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 		        /*deal with the msg*/
 			dispatch_message(ctx, &msg);
 		}
-		/*TODO watch dog???!!*/
+		/*update monitor, as a watch dog for module*/
 		skynet_monitor_trigger(sm, 0,0);
 	}
 

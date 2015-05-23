@@ -108,6 +108,10 @@ free_monitor(struct monitor *m) {
 	skynet_free(m);
 }
 
+/**
+ * @brief watch dog for check if the module exit
+ *
+ */
 static void *
 _monitor(void *p) {
 	struct monitor * m = p;
@@ -128,6 +132,10 @@ _monitor(void *p) {
 	return NULL;
 }
 
+/**
+ * @brief watch dog for check if need to wake up more thread when load is too heavy for the server
+ *
+ */
 static void *
 _timer(void *p) {
 	struct monitor * m = p;
@@ -204,6 +212,7 @@ _start(int thread) {
 
 	m->m = skynet_malloc(thread * sizeof(struct skynet_monitor *));
 	int i;
+
 	/*分配监视器*/
 	for (i=0;i<thread;i++) {
 		m->m[i] = skynet_monitor_new();
@@ -214,6 +223,7 @@ _start(int thread) {
 		fprintf(stderr, "Init mutex error");
 		exit(1);
 	}
+
 	/*初始化条件管理*/
 	if (pthread_cond_init(&m->cond, NULL)) {
 		fprintf(stderr, "Init cond error");
@@ -296,14 +306,19 @@ skynet_start(struct skynet_config * config) {
 	}
 	/*设置全局节点ID*/
 	skynet_harbor_init(config->harbor);
+
 	/*初始化模块管理结构*/
 	skynet_handle_init(config->harbor);
+
 	/*初始化消息队列管理结构，链式管理*/
 	skynet_mq_init();
+
 	/*初始化模块管理结构*/
 	skynet_module_init(config->module_path);
+
 	/*初始化时间管理*/
 	skynet_timer_init();
+
 	/*初始化套接字全局管理结构*/
 	skynet_socket_init();
 	
