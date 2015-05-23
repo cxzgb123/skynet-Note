@@ -23,7 +23,6 @@ struct handle_name {
 /**
  * @brief used store all modules in it
  *
- *
  */
 struct handle_storage {
 	struct rwlock lock;             /*read and write lock*/

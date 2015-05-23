@@ -14,7 +14,6 @@ static unsigned int HARBOR = ~0;
  * @param[in] rmsg msg to the remote
  * @param[in] source source of the  msg
  * @param[in] session session id
- *
  */
 void 
 skynet_harbor_send(struct remote_message *rmsg, uint32_t source, int session) {
